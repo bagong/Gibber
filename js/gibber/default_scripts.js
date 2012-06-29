@@ -481,6 +481,34 @@ default:
 '\n'+
 'G.dev.readFn = window.audioProcess;  // restore the Gibber graph',
 
+"gamelan" : 
+"// Welcome to gamelanScript! ##################################################\n"+
+"\n"+
+"loadGamelan(); // or lg() prepare additional files \n"+
+"play(); // start playing\n"+
+"pause(); // or\n"+
+"stop()/pause(); // stop playing\n"+
+"su(); // or speedUp()\n"+
+"sd(); // or speedDown()\n"+
+"ss(); // or speedStable()\n"+
+"doSuwuk(); // to end organically\n\n"+
+
+"/*gamelanScript is built to grow, add pieces, rules, knowledge etc...\n"+
+"For the time being this requires to understand the underlying code \n"+
+"in order to add notation, performance rules and more.\n"+
+"You are most welcome to play around and propose additions, corrections ;) Please\n"+
+"make yourself heard (e.g. in the Forum) if you find something or have questions...\n\n"+
+"Some information can be gathered from following the logging in the Javascript-Console.*/\n\n"+
+
+"\n\n"+
+"// if everything goes wild reload the page and try consecutively:\n"+
+"G.clear();\n"+
+"loadGamelan();\n"+
+"play();\n\n"+
+"// check for error-messages in the js-console and repeat the steps above repeatedly\n"+
+"// if nothing helps, your computer might be too slow - but there is a plan for a less\n"+
+"// ressource consuming audio-engine in the nearer future. Stay tuned!",
+
 "SYNTHESIS TUTORIALS":"LABEL START",
 
 "Additive":

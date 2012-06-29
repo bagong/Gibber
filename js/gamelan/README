@@ -1,0 +1,13 @@
+This is a Gamelan extension to Charlie Roberts Audio Live-Coding-environment
+Gibber (http://charlie-roberts.com/gibber/info/). It allows to play Javanese
+Gamelan-music from basic notation and thereby tries to model some of the
+competence of Javanese musicians. The project name for this extension is
+"gamelanScript". It is in a early stage of development and can only play
+one piece. There is no documentation except the code itself and some logging
+you can see in the javascript-console.
+
+gamelanScript is planned to be generic and extensible, so expect more...
+Contributions are welcome.
+
+Rainer Schütz
+rs@bagong.de
