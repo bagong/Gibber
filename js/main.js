@@ -4,19 +4,19 @@ requirejs.config({
 });
 
 requirejs([
-	'codemirror/codemirror', 
-	"js/codemirror/util/loadmode.js",
-	"js/codemirror/util/overlay.js",
-	'gibberish/lib/external/sink-light', 
-	'gibberish/lib/gibberish', 
-	'gibber/gibber',
-	'gibber/environment',
-	'gibber/default_scripts',
-	'gibberish/lib/external/audiofile', 
-	'gibberish/lib/utils', 
-	'gibberish/lib/cycle',
-	/*'jquery',*/
-	'samples/drum-samples',
+  'codemirror/codemirror', 
+  "js/codemirror/util/loadmode.js",
+  "js/codemirror/util/overlay.js",
+  'gibberish/lib/external/sink-light', 
+  'gibberish/lib/gibberish', 
+  'gibber/gibber',
+  'gibber/environment',
+  'gibber/default_scripts',
+  'gibberish/lib/external/audiofile', 
+  'gibberish/lib/utils', 
+  'gibberish/lib/cycle',
+  'samples/drum-samples',
+  'js/gamelan/gamelan.js'
 	],
 	
 	function   ( _a, _b, _c, _d, __gibberish, __gibber, __environment, e) {
