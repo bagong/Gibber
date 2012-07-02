@@ -16,7 +16,8 @@ conf = { // these settings can change (that are the plans ;)), but they are more
   soMode : true, // if false, balungan-notation will be used with minimal processing (just cleaning) (mind beginning of ngelik!)
   pulseMode : true, // pulseMode creates durations from a mini-Pulse while propMode or dursMode uses individual durations for each note (the later doesn't work well yet, problems with offset, but is probably more consistent on the long run)
   audioHost : "http://localhost",
-  audioPath : "gibber/js/gamelan/audiofiles"
+  audioPath : "gibber/js/gamelan/audiofiles",
+  useSamples : true
 };
 par = {
   tooFast : 2500,
@@ -97,7 +98,7 @@ now = { // contextual/temporal information - depend on above values and performa
 // flags for state monitoring (no user-interference expected)
 flags = {
   gendhing : "wilujeng",
-  pathet : "sm",
+  pathet : "p7",
   form : "ladrang",
   garap : "gerongan-salisir",
   bukaInstr : "bonangBar",
@@ -256,12 +257,13 @@ instrFrequencies = function (iName) {
     var instr = now.instruments[iName];
   }
   var tuning = now.tuning;
-  var trans = instr.transpose;
-  var parTrans = par.transpose;
-  var oct = instr.octave;
-  var str = instr.stretch;
-  var parStr = par.stretch;
-  var det = instr.detune;
+  var detune = instr.detuneSynth;
+  var globalTrans = par.transpose;
+  var globalStretch = par.stretch;
+  var octaveReg = instr.octave;
+  var instrStretch = instr.stretch;
+  var instrDetune = detune[0]
+  var tonesDetune = detune[1]
   var iScale = instr.notes;
   var cnt = iScale.length;
   var nScale = (now.laras==="pelog") ? [1,2,3,4,5,6,7] : [1,2,3,5,6];
@@ -269,7 +271,7 @@ instrFrequencies = function (iName) {
   for (var i = 0; i < cnt; i++ ) {
     var note = iScale[i];
     var wrap = (note>7) ? note-7 : (note<1) ? note+7 : note; // this allows for 3 octaves (only)
-    scale.push( tuning[nScale.indexOf(wrap)] * parTrans * (Math.pow(2,oct[i]-1))/8 * str * parStr * det[i]); 
+    scale.push( tuning[nScale.indexOf(wrap)] * globalTrans * instrDetune * tonesDetune[i] * (Math.pow(2,octaveReg[i]-1))/8 * instrStretch * globalStretch); 
   } 
   return scale;
 };
@@ -343,7 +345,7 @@ part = function(target,iIx,segment,irama,counter,play) {
   var part = garap[iName](segment,irama);
   var degrees = part.sequence;
   var durations = part.durations;
-  var ampInstr = instr.amp;
+  var ampInstr = (!conf.useSamples && !instr.samplesOnly) ? instr.ampSynth : instr.ampSamp;
   var ampPart = part.amp;
   var ampPerson = person.amp;
   var attackInstr = instr.attack;
@@ -447,7 +449,7 @@ dia = function(degree) {
 jirolu = function(degree) {
   var degrees = [-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
   var jirolu = ["__ma","__nem","__pi","_ji","_ro","_lu","_pat","_ma","_nem","_pi","ji","ro","lu","pat","ma","nem","pi","ji_","ro_","lu_","pat_","ma_","nem_","pi_"];
-  return jirolu[degrees.indexOf(degree)];
+  return jirolu[degrees.indexOf(+degree)];
 }
 taktak = function(symbol) {
   var taktak = ["bem","dhah","thung","tak","ket","kret","thong","tap"];
@@ -2024,15 +2026,17 @@ gamelan = {
       instruments : {
         bonangPan : {
           use : true,
+          samplesOnly : false,
           type : "gong chimes",
           resonator : "body",
           notes : [-6,-5,-4,-2,-1,1,2,3,5,6,8,9],
           octave : [5,5,5,5,5,6,6,6,6,6,7,7],
           stretch : 1,
           transpose : 1,
-          detune : [1.005,1.004,1.005,1.008,1.006,1.005,1.006,1.007,1.005,1.007,1.008,1.007],
-          ampSamp : [0.04,[0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04]],
-          amp : [0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04],
+          detuneSynth : [1,[1.005,1.004,1.005,1.008,1.006,1.005,1.006,1.007,1.005,1.007,1.008,1.007]],
+          detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
+          ampSynth : [0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [300,300,300,300,300,300,300,300,300,300,300,300],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
@@ -2042,15 +2046,17 @@ gamelan = {
         },
         bonangBar : {
           use : true,
+          samplesOnly : false,
           type : "gong chimes",
           resonator : "body",
           notes : [-6,-5,-4,-2,-1,1,2,3,5,6,8,9],
           octave : [4,4,4,4,4,5,5,5,5,5,6,6],
           stretch : 1,
           transpose : 1,
-          detune : [1.004,1.006,1.005,1.007,1.005,1.003,1.004,1.004,1.006,1.005,1.007,1.005],
-          ampSamp : [0.12,[0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12]],
-          amp : [0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12],
+          detuneSynth : [1,[1.004,1.006,1.005,1.007,1.005,1.003,1.004,1.004,1.006,1.005,1.007,1.005]],
+          detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
+          ampSynth : [0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [800,800,800,800,800,800,800,800,800,800,800,800],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
@@ -2060,15 +2066,17 @@ gamelan = {
         },
         peking : {
           use : true,
+          samplesOnly : false,
           type : "metallophone",
           resonator : "tub",
           notes : [-1,1,2,3,5,6,8],
           octave : [5,6,6,6,6,6,7],
           stretch : 1,
           transpose : 1,
-          detune : [1.007,1.008,1.009,1.005,1.007,1.006,1.008],
-          ampSamp : [0.08,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
-          amp : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
+          detuneSynth : [1,[1.007,1.008,1.009,1.005,1.007,1.006,1.008]],
+          detuneSamp : [1,[1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1]],
+          ampSynth : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
           attack : [1,1,1,1,1,1,1],
           decay : [600,600,600,600,600,600,600],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2078,15 +2086,17 @@ gamelan = {
         },
         saronA : {
           use : true,
+          samplesOnly : false,
           type : "metallophone",
           resonator : "tub",
           notes : [-1,1,2,3,5,6,8],
           octave : [4,5,5,5,5,5,6],
           stretch : 1,
           transpose : 1,
-          detune : [1.005,1.003,1.004,1.004,1.006,1.005,1.007],
-          ampSamp : [0.08,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
-          amp : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
+          detuneSynth : [1,[1.005,1.003,1.004,1.004,1.006,1.005,1.007]],
+          detuneSamp : [1,[1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1]],
+          ampSynth : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
           attack : [1,1,1,1,1,1,1],
           decay : [1300,1300,1300,1300,1300,1300,1300],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2096,15 +2106,17 @@ gamelan = {
         },
         saronB : {
           use : true,
+          samplesOnly : false,
           type : "metallophone",
           resonator : "tub",
           notes : [-1,1,2,3,5,6,8],
           octave : [4,5,5,5,5,5,6],
           stretch : 1,
           transpose : 1,
-          detune : [1.003,1.005,1.008,1.003,1.005,1.002,1.006],
-          ampSamp : [0.09,[0.09,0.09,0.09,0.09,0.09,0.09,0.09]],
-          amp : [0.09,0.09,0.09,0.09,0.09,0.09,0.09],
+          detuneSynth : [1,[1.003,1.005,1.008,1.003,1.005,1.002,1.006]],
+          detuneSamp : [1,[1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1]],
+          ampSynth : [0.09,0.09,0.09,0.09,0.09,0.09,0.09],
           attack : [1,1,1,1,1,1,1],
           decay : [1500,1500,1500,1500,1500,1500,1500],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2114,15 +2126,17 @@ gamelan = {
         },
         demung : {
           use : true,
+          samplesOnly : false,
           type : "metallophone",
           resonator : "tub",
           notes : [-1,1,2,3,5,6,8],
           octave : [3,4,4,4,4,4,5],
           stretch : 1,
           transpose : 1,
-          detune : [1.006,1.004,1.007,1.003,1.005,1.004,1.005],
-          ampSamp : [0.1,[0.1,0.1,0.1,0.1,0.1,0.1,0.1]],
-          amp : [0.1,0.1,0.1,0.1,0.1,0.1,0.1],
+          detuneSynth : [1,[1.006,1.004,1.007,1.003,1.005,1.004,1.005]],
+          detuneSamp : [1,[1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1]],
+          ampSynth : [0.1,0.1,0.1,0.1,0.1,0.1,0.1],
           attack : [1,1,1,1,1,1,1],
           decay : [2500,2500,2500,2500,2500,2500,2500],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2132,15 +2146,17 @@ gamelan = {
         },
         slenthem : {
           use : true,
+          samplesOnly : false,
           type : "metallophone",
           resonator : "tub",
           notes : [-1,1,2,3,5,6,8],
           octave : [2,3,3,3,3,3,4],
           stretch : 1,
           transpose : 1,
-          detune : [1.002,1.003,1.004,1.005,1.004,1.006,1.004],
-          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
-          amp : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
+          detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006,1.004]],
+          detuneSamp : [1,[1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1]],
+          ampSynth : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
           attack : [1,1,1,1,1,1,1],
           decay : [5000,5000,5000,5000,5000,5000,5000],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2150,15 +2166,17 @@ gamelan = {
         },
         kempyang : {
           use : true,
+          samplesOnly : false,
           type : "gong",
           resonator : "body",
           notes : [8],
           octave : [6],
           stretch : 1,
           transpose : 1,
-          detune : [1.01],
-          ampSamp : [0.1,[0.1]],
-          amp : [0.1],
+          detuneSynth : [1,[1.01]],
+          detuneSamp : [1,[1]],
+          ampSamp : [1,[1]],
+          ampSynth : [0.1],
           attack : [1],
           decay : [800],
           waveShape : ["sine"],
@@ -2168,15 +2186,17 @@ gamelan = {
         },
         kethuk : {
           use : true,
+          samplesOnly : false,
           type : "gong",
           resonator : "body",
           notes : [2],
           octave : [4],
           stretch : 1,
           transpose : 1,
-          detune : [1.05],
-          ampSamp : [0.15,[0.15]],
-          amp : [0.15],
+          detuneSynth : [1,[1.05]],
+          detuneSamp : [1,[1]],
+          ampSamp : [1,[1]],
+          ampSynth : [0.15],
           attack : [100],
           decay : [300],
           waveShape : ["pulse"],
@@ -2186,15 +2206,17 @@ gamelan = {
         },
         kempul : {
           use : true,
+          samplesOnly : false,
           type : "gong",
           resonator : "body",
           notes : [3,5,6,8,9],
           octave : [2,2,2,3,3], // [sic!] this reorders the gongs
           stretch : 1,
           transpose : 1,
-          detune : [1.002,1.003,1.004,1.005,1.004],
-          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15]],
-          amp : [0.15,0.15,0.15,0.15,0.15],
+          detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004]],
+          detuneSamp : [1,[1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1]],
+          ampSynth : [0.15,0.15,0.15,0.15,0.15],
           attack : [80,80,80,80,80],
           decay : [4000,4000,4000,4000,4000],
           waveShape : ["sine","sine","sine","sine","sine"],
@@ -2204,15 +2226,17 @@ gamelan = {
         },
         kenong : {
           use : true,
+          samplesOnly : false,
           type : "gong",
           resonator : "body",
           notes : [2,3,5,6,8],
           octave : [4,4,4,4,5],
           stretch : 1,
           transpose : 1,
-          detune : [1.002,1.003,1.004,1.005,1.004],
-          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15]],
-          amp : [0.15,0.15,0.15,0.15,0.15],
+          detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004]],
+          detuneSamp : [1,[1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1]],
+          ampSynth : [0.15,0.15,0.15,0.15,0.15],
           attack : [2,2,2,2,2],
           decay : [3000,3000,3000,3000,3000],
           waveShape : ["sine","sine","sine","sine","sine"],
@@ -2222,15 +2246,17 @@ gamelan = {
         },
         gongSuw : {
           use : false,
+          samplesOnly : false,
           type : "gong",
           resonator : "body",
           notes : [1,2],
           octave : [2,2],
           stretch : 1,
           transpose : 1,
-          detune : [0.99,0.99],
-          ampSamp : [0.1,[0.1,0.1]],
-          amp : [0.1,0.1],
+          detuneSynth : [1,[0.99,0.99]],
+          detuneSamp : [1,[1,1]],
+          ampSamp : [1,[1,1]],
+          ampSynth : [0.1,0.1],
           attack : [80,80],
           decay : [5000,5000],
           waveShape : ["pulse","pulse"],
@@ -2245,15 +2271,17 @@ gamelan = {
       instruments : {
         bonangPan : {
           use : true,
+          samplesOnly : false,
           type : "gong chimes",
           resonator : "body",
           notes : [-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7],
           octave : [5,5,5,5,5,5,5,6,6,6,6,6,6,6],
           stretch : 1,
           transpose : 1,
-          detune : [1.005,1.004,1.005,1.008,1.006,1.005,1.006,1.007,1.005,1.007,1.008,1.007,1.006,1.007],
-          ampSamp : [0.04,[0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04]],
-          amp : [0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04],
+          detuneSynth : [1,[1.005,1.004,1.005,1.008,1.006,1.005,1.006,1.007,1.005,1.007,1.008,1.007,1.006,1.007]],
+          detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
+          ampSynth : [0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [300,300,300,300,300,300,300,300,300,300,300,300,300,300],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
@@ -2263,15 +2291,17 @@ gamelan = {
         },
         bonangBar : {
           use : true,
+          samplesOnly : false,
           type : "gong chimes",
           resonator : "body",
           notes : [-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7],
           octave : [4,4,4,4,4,4,4,5,5,5,5,5,5,5],
           stretch : 1,
           transpose : 1,
-          detune : [1.004,1.006,1.005,1.007,1.005,1.003,1.004,1.004,1.006,1.005,1.007,1.005,1.003,1.004],
-          ampSamp : [0.12,[0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12]],
-          amp : [0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12],
+          detuneSynth : [1,[1.004,1.006,1.005,1.007,1.005,1.003,1.004,1.004,1.006,1.005,1.007,1.005,1.003,1.004]],
+          detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
+          ampSynth : [0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [800,800,800,800,800,800,800,800,800,800,800,800,800,800],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
@@ -2281,15 +2311,17 @@ gamelan = {
         },
         peking : {
           use : true,
+          samplesOnly : false,
           type : "metallophone",
           resonator : "tub",
           notes : [1,2,3,4,5,6,7],
           octave : [6,6,6,6,6,6,6],
           stretch : 1,
           transpose : 1,
-          detune : [1.007,1.008,1.009,1.005,1.007,1.006,1.008],
-          ampSamp : [0.08,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
-          amp : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
+          detuneSynth : [1,[1.007,1.008,1.009,1.005,1.007,1.006,1.008]],
+          detuneSamp : [1,[1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1]],
+          ampSynth : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
           attack : [1,1,1,1,1,1,1],
           decay : [600,600,600,600,600,600,600],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2299,15 +2331,17 @@ gamelan = {
         },
         saronA : {
           use : true,
+          samplesOnly : false,
           type : "metallophone",
           resonator : "tub",
           notes : [1,2,3,4,5,6,7],
           octave : [5,5,5,5,5,5,5],
           stretch : 1,
           transpose : 1,
-          detune : [1.005,1.003,1.004,1.004,1.006,1.005,1.007],
-          ampSamp : [0.08,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
-          amp : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
+          detuneSynth : [1,[1.005,1.003,1.004,1.004,1.006,1.005,1.007]],
+          detuneSamp : [1,[1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1]],
+          ampSynth : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
           attack : [1,1,1,1,1,1,1],
           decay : [1300,1300,1300,1300,1300,1300,1300],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2317,15 +2351,17 @@ gamelan = {
         },
         saronB : {
           use : true,
+          samplesOnly : false,
           type : "metallophone",
           resonator : "tub",
           notes : [1,2,3,4,5,6,7],
           octave : [5,5,5,5,5,5,5],
           stretch : 1,
           transpose : 1,
-          detune : [1.003,1.005,1.008,1.003,1.005,1.002,1.006],
-          ampSamp : [0.09,[0.09,0.09,0.09,0.09,0.09,0.09,0.09]],
-          amp : [0.09,0.09,0.09,0.09,0.09,0.09,0.09],
+          detuneSynth : [1,[1.003,1.005,1.008,1.003,1.005,1.002,1.006]],
+          detuneSamp : [1,[1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1]],
+          ampSynth : [0.09,0.09,0.09,0.09,0.09,0.09,0.09],
           attack : [1,1,1,1,1,1,1],
           decay : [1500,1500,1500,1500,1500,1500,1500],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2335,15 +2371,17 @@ gamelan = {
         },
         demung : {
           use : true,
+          samplesOnly : false,
           type : "metallophone",
           resonator : "tub",
           notes : [1,2,3,4,5,6,7],
           octave : [4,4,4,4,4,4,4],
           stretch : 1,
           transpose : 1,
-          detune : [1.006,1.004,1.007,1.003,1.005,1.004,1.005],
-          ampSamp : [0.1,[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]],
-          amp : [0.1,0.1,0.1,0.1,0.1,0.1,0.1],
+          detuneSynth : [1,[1.006,1.004,1.007,1.003,1.005,1.004,1.005]],
+          detuneSamp : [1,[1,1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1,1]],
+          ampSynth : [0.1,0.1,0.1,0.1,0.1,0.1,0.1],
           attack : [1,1,1,1,1,1,1],
           decay : [2500,2500,2500,2500,2500,2500,2500],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2353,15 +2391,17 @@ gamelan = {
         },
         slenthem : {
           use : true,
+          samplesOnly : false,
           type : "metallophone",
           resonator : "tub",
           notes : [1,2,3,4,5,6,7],
           octave : [3,3,3,3,3,,3,3],
           stretch : 1,
           transpose : 1,
-          detune : [1.002,1.003,1.004,1.005,1.004,1.006,1.004],
-          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
-          amp : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
+          detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006,1.004]],
+          detuneSamp : [1,[1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1]],
+          ampSynth : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
           attack : [1,1,1,1,1,1,1],
           decay : [5000,5000,5000,5000,5000,5000,5000],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2371,15 +2411,17 @@ gamelan = {
         },
         kempyang : {
           use : true,
+          samplesOnly : false,
           type : "gong",
           resonator : "body",
           notes : [6],
           octave : [5],
           stretch : 1,
           transpose : 1,
-          detune : [1.01],
-          ampSamp : [0.15,[0.15]],
-          amp : [0.15],
+          detuneSynth : [1,[1.01]],
+          detuneSamp : [1,[1]],
+          ampSamp : [1,[1]],
+          ampSynth : [0.15],
           attack : [1],
           decay : [800],
           waveShape : ["sine"],
@@ -2389,15 +2431,17 @@ gamelan = {
         },
         kethuk : {
           use : true,
+          samplesOnly : false,
           type : "gong",
           resonator : "body",
           notes : [6],
           octave : [3],
           stretch : 1,
           transpose : 1,
-          detune : [1.01],
-          ampSamp : [0.1,[0.1]],
-          amp : [0.1],
+          detuneSynth : [1,[1.01]],
+          detuneSamp : [1,[1]],
+          ampSamp : [1,[1]],
+          ampSynth : [0.1],
           attack : [100],
           decay : [300],
           waveShape : ["pulse"],
@@ -2407,15 +2451,17 @@ gamelan = {
         },
         kempul : {
           use : true,
+          samplesOnly : false,
           type : "gong",
           resonator : "body",
           notes : [3,5,6,7,8,9],
           octave : [3,3,3,3,4,4], // [sic!] this reorders the gongs
           stretch : 1,
           transpose : 1,
-          detune : [1.002,1.003,1.004,1.005,1.004,1.006],
-          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15,0.15]],
-          amp : [0.15,0.15,0.15,0.15,0.15,0.15],
+          detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006]],
+          detuneSamp : [1,[1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1]],
+          ampSynth : [0.15,0.15,0.15,0.15,0.15,0.15],
           attack : [80,80,80,80,80,80],
           decay : [4000,4000,4000,4000,4000,4000],
           waveShape : ["sine","sine","sine","sine","sine","sine"],
@@ -2425,15 +2471,17 @@ gamelan = {
         },
         kenong : {
           use : true,
+          samplesOnly : false,
           type : "gong",
           resonator : "body",
           notes : [2,3,5,6,7,8,9],
           octave : [4,4,4,4,4,5,5],
           stretch : 1,
           transpose : 1,
-          detune : [1.002,1.003,1.004,1.005,1.004,1.006,1.004],
-          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
-          amp : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
+          detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006,1.004]],
+          detuneSamp : [1,[1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1]],
+          ampSynth : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
           attack : [2,2,2,2,2,2,2],
           decay : [3000,3000,3000,3000,3000,3000,3000],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2443,15 +2491,17 @@ gamelan = {
         },
         gongSuw : {
           use : false,
+          samplesOnly : false,
           type : "gong",
           resonator : "body",
           notes : [1,2],
           octave : [2,2],
           stretch : 1,
           transpose : 1,
-          detune : [0.99,0.99],
-          ampSamp : [0.1,[0.1,0.1]],
-          amp : [0.1,0.1],
+          detuneSynth : [1,[0.99,0.99]],
+          detuneSamp : [1,[1,1]],
+          ampSamp : [1,[1,1]],
+          ampSynth : [0.1,0.1],
           attack : [80,80],
           decay : [5000,5000],
           waveShape : ["sine","sine"],
@@ -2465,15 +2515,17 @@ gamelan = {
       instruments : {
         gong : { 
           use : true,
+          samplesOnly : false,
           type : "gong",
           resonator : "body",
           notes : [3,5,6],
           octave : [1,1,1],
           stretch : 1,
           transpose : 1,
-          detune : [0.95,0.95,0.95],
-          ampSamp : [0.35,[0.35,0.35,0.35]],
-          amp : [0.35,0.35,0.35],
+          detuneSynth : [1,[0.95,0.95,0.95]],
+          detuneSamp : [1,[1,1,1]],
+          ampSamp : [1,[1,1,1]],
+          ampSynth : [0.35,0.35,0.35],
           attack : [100,100,100],
           decay : [7000,7000,7000],
           waveShape : ["triangle"],
@@ -2484,14 +2536,17 @@ gamelan = {
           effectBus : ["gongs",0.5]
         },
         kdhKalih : {
-          use : false,
+          use : true,
+          samplesOnly : true,
           type : "drums",
           notes : ["b","p","t","k","o","a","r"],
           toneNames : ["dhah","thung","tak","ket","thong","tap","kret"],
           transpose : 1,
           frequency : [120,360,500,500,420,500,500], // why fantasy?
-          ampSamp : [0.2,[0.2,0.2,0.2,0.2,0.1,0.2,0.2]],
-          amp : [0.2,0.2,0.2,0.2,0.1,0.2,0.2],
+          detuneSynth : [1,[1,1,1,1,1,1,1]], // why fantasy?
+          detuneSamp : [1,[1,1,1,1,1,1,1]],
+          ampSamp : [1,[1,1,1,1,1,1,1]],
+          ampSynth : [0.2,0.2,0.2,0.2,0.1,0.2,0.2],
           attack : [20,5,1,1,2,1,1],
           decay : [2000,1000,100,50,1000,20,50],
           waveShape : ["sine","sine","square","sawtooth","pulse","sawtooth","pulse"],
@@ -2754,7 +2809,7 @@ startingTheEngines = function() {
         if (nyaga[pName].ricikan === iName) { pNames.push(pName); break; }
       }
       // prepare Samplers (to be callable by instrumentName)
-      window[cap] = Function("_sequence", "_timeValue", "_amp", "_freq", "return new _sampler('"+iName+"', _sequence, _timeValue, _amp, _freq)");
+      window[cap] = Function("_sequence", "_timeValue", "_amp", "_freq", "return new _SampleSeq('"+iName+"', _sequence, _timeValue, _amp, _freq)");
       ix++;
     }
   }
@@ -2767,8 +2822,6 @@ startingTheEngines = function() {
   }
   // push part-definitions to array "parts" ####################################
   partsGen();
-
-// window[iName] = function(_sequence, _timeValue, _amp, _freq) { return new _sampler(eval(iNames[ix]), _sequence, _timeValue, _amp, _freq); };
 
   // generate SHORTHANDS for found parts #######################################
   for (var i=0;i<instrCnt;i++) {
