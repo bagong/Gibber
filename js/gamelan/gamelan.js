@@ -1,4 +1,4 @@
-// GAMELANSCRIPT ###############################################################
+// gamelanScript ###############################################################
 // by Rainer Schuetz (2012) for 
 // GIBBER
 // by Charlie Roberts
@@ -6,7 +6,7 @@
 // MIT License
 // #############################################################################
 // Global Variables - prevent restrict vis to function
-var parts = [], synths = [], scales = [], iNames = [], pNames = [],
+var parts = [], synths = [], scales = [], iNames = [], pNames = [], now = {},
 instrCnt = 0, gPulse, parts, _32;
 conf = { // these settings can change (that are the plans ;)), but they are more low-level than flags.
   irLevels : 2, // pow of 2 for pulses. Speed-levels for now just irI and II irLevels & sdLevels overlap by one.
@@ -14,7 +14,9 @@ conf = { // these settings can change (that are the plans ;)), but they are more
   timeKeeper : "peking",
   synthPref : "light", // currently standard or light - standard will use FM-synthesis if available, but it is too heavy for most computers in 2012
   soMode : true, // if false, balungan-notation will be used with minimal processing (just cleaning) (mind beginning of ngelik!)
-  pulseMode : true // pulseMode creates durations from a mini-Pulse while propMode or dursMode uses individual durations for each note (the later doesn't work well yet, problems with offset, but is probably more consistent on the long run)
+  pulseMode : true, // pulseMode creates durations from a mini-Pulse while propMode or dursMode uses individual durations for each note (the later doesn't work well yet, problems with offset, but is probably more consistent on the long run)
+  audioHost : "http://localhost",
+  audioPath : "gibber/js/gamelan/audiofiles"
 };
 par = {
   tooFast : 2500,
@@ -94,14 +96,15 @@ now = { // contextual/temporal information - depend on above values and performa
 };
 // flags for state monitoring (no user-interference expected)
 flags = {
-//  get gendhing() { return init.gendhing },
-//  get segment() { return init.segment },
-//  get pathet() { return init.pathet },
-//  get form() { return init.form },
-//  get irama() { return init.irama },
-//  get garap() { return init.garap },
-//  get bukaInstr() { return init.bukaInstr },
-//  get gamelanName() { return init.gamelanName },
+  gendhing : "wilujeng",
+  pathet : "sm",
+  form : "ladrang",
+  garap : "gerongan-salisir",
+  bukaInstr : "bonangBar",
+  gamelanName : "generic",
+  segment : "buka", // select segment to start with
+  irama : (this.form === "lancaran") ? "ir0": "irI", // select irama to start with - adjust speed (G.setBPM(60)) if you want to start in irII
+  bpm : 120,
   firstGongan : false,
   goToNgelik : false,
   seseg : false,
@@ -259,14 +262,14 @@ instrFrequencies = function (iName) {
   var str = instr.stretch;
   var parStr = par.stretch;
   var det = instr.detune;
-  var iScale = instr.toneCiphers;
+  var iScale = instr.notes;
   var cnt = iScale.length;
   var nScale = (now.laras==="pelog") ? [1,2,3,4,5,6,7] : [1,2,3,5,6];
   var scale = [];
   for (var i = 0; i < cnt; i++ ) {
     var note = iScale[i];
     var wrap = (note>7) ? note-7 : (note<1) ? note+7 : note; // this allows for 3 octaves (only)
-    scale.push( tuning[nScale.indexOf(wrap)] * parTrans * oct[i] * str * parStr * det[i]); 
+    scale.push( tuning[nScale.indexOf(wrap)] * parTrans * (Math.pow(2,oct[i]-1))/8 * str * parStr * det[i]); 
   } 
   return scale;
 };
@@ -332,7 +335,7 @@ part = function(target,iIx,segment,irama,counter,play) {
   play = play || false;
   var iName = iNames[iIx];
   var instr = now.instruments[iName];
-  var toneCiphers = instr.toneCiphers;
+  var notes = instr.notes;
   var scale = scales[iIx];
   var pName = pNames[iIx];
   var person = nyaga[pName];
@@ -368,7 +371,7 @@ part = function(target,iIx,segment,irama,counter,play) {
   var lag = offsetPart * offsetPerson; // lag and offset should not be mixed - offset is technical, lag musical
  
   for (var i=0;i<cntDegrees;i++) {
-    normIx = toneCiphers.indexOf(degrees[i]);
+    normIx = notes.indexOf(degrees[i]);
     switch (iName) {
       case "kendhang" : freqs.push(degrees[i]); break;
       default : (degrees[i] || degrees[i] === 0) ? freqs.push(scale[normIx]) : freqs.push(undefined);
@@ -428,15 +431,28 @@ any = function(arrays) {
 }
 // NOTATION-Parser #############################################################
 // creates a bal-array whithout unused elements
-degree = dg = function(string) {
-  var dia = ["1.","2.","3.","4.","5.","6.","7.","1","2","3","4","5","6","7","1'","2'","3'","4'","5'","6'","7'"];
-  var degrees = [-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
-  return degrees[dia.indexOf(string)];
+degree = dg = function(dia) {
+  var dias = ["5..","6..","7..","1.","2.","3.","4.","5.","6.","7.","1","2","3","4","5","6","7","1'","2'","3'","4'","5'","6'","7'"];
+  var degrees = [-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+  return degrees[dias.indexOf(dia)];
 }
-dia = function(number) {
-  var degrees = [-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
-  var dia = ["1.","2.","3.","4.","5.","6.","7.","1","2","3","4","5","6","7","1'","2'","3'","4'","5'","6'","7'"];
-  return dia[degrees.indexOf(number)];
+degree2so = dg2so = function(degree) {
+  return (degree-7>0) ? degree-7 : (degree+7<1) ? degree+14 : (degree+7<8) ? degree+7 : degree;
+}
+dia = function(degree) {
+  var degrees = [-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+  var dia = ["5..","6..","7..","1.","2.","3.","4.","5.","6.","7.","1","2","3","4","5","6","7","1'","2'","3'","4'","5'","6'","7'"];
+  return dia[degrees.indexOf(degree)];
+}
+jirolu = function(degree) {
+  var degrees = [-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+  var jirolu = ["__ma","__nem","__pi","_ji","_ro","_lu","_pat","_ma","_nem","_pi","ji","ro","lu","pat","ma","nem","pi","ji_","ro_","lu_","pat_","ma_","nem_","pi_"];
+  return jirolu[degrees.indexOf(degree)];
+}
+taktak = function(symbol) {
+  var taktak = ["bem","dhah","thung","tak","ket","kret","thong","tap"];
+  var symbols = ["B","b","p","t","k","r","o","a"];
+  return taktak[symbols.indexOf(symbol)]
 }
 cleanNut = function(notation) {
   var cnt = notation.length;
@@ -2010,11 +2026,12 @@ gamelan = {
           use : true,
           type : "gong chimes",
           resonator : "body",
-          toneCiphers : [-6,-5,-4,-2,-1,1,2,3,5,6,8,9],
-          octave : [2,2,2,2,2,4,4,4,4,4,8,8], // multiplicator
+          notes : [-6,-5,-4,-2,-1,1,2,3,5,6,8,9],
+          octave : [5,5,5,5,5,6,6,6,6,6,7,7],
           stretch : 1,
           transpose : 1,
           detune : [1.005,1.004,1.005,1.008,1.006,1.005,1.006,1.007,1.005,1.007,1.008,1.007],
+          ampSamp : [0.04,[0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04]],
           amp : [0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [300,300,300,300,300,300,300,300,300,300,300,300],
@@ -2027,11 +2044,12 @@ gamelan = {
           use : true,
           type : "gong chimes",
           resonator : "body",
-          toneCiphers : [-6,-5,-4,-2,-1,1,2,3,5,6,8,9],
-          octave : [1,1,1,1,1,2,2,2,2,2,4,4],
+          notes : [-6,-5,-4,-2,-1,1,2,3,5,6,8,9],
+          octave : [4,4,4,4,4,5,5,5,5,5,6,6],
           stretch : 1,
           transpose : 1,
           detune : [1.004,1.006,1.005,1.007,1.005,1.003,1.004,1.004,1.006,1.005,1.007,1.005],
+          ampSamp : [0.12,[0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12]],
           amp : [0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [800,800,800,800,800,800,800,800,800,800,800,800],
@@ -2044,11 +2062,12 @@ gamelan = {
           use : true,
           type : "metallophone",
           resonator : "tub",
-          toneCiphers : [-1,1,2,3,5,6,8],
-          octave : [2,4,4,4,4,4,8],
+          notes : [-1,1,2,3,5,6,8],
+          octave : [5,6,6,6,6,6,7],
           stretch : 1,
           transpose : 1,
           detune : [1.007,1.008,1.009,1.005,1.007,1.006,1.008],
+          ampSamp : [0.08,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
           amp : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
           attack : [1,1,1,1,1,1,1],
           decay : [600,600,600,600,600,600,600],
@@ -2061,11 +2080,12 @@ gamelan = {
           use : true,
           type : "metallophone",
           resonator : "tub",
-          toneCiphers : [-1,1,2,3,5,6,8],
-          octave : [1,2,2,2,2,2,4],
+          notes : [-1,1,2,3,5,6,8],
+          octave : [4,5,5,5,5,5,6],
           stretch : 1,
           transpose : 1,
           detune : [1.005,1.003,1.004,1.004,1.006,1.005,1.007],
+          ampSamp : [0.08,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
           amp : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
           attack : [1,1,1,1,1,1,1],
           decay : [1300,1300,1300,1300,1300,1300,1300],
@@ -2078,11 +2098,12 @@ gamelan = {
           use : true,
           type : "metallophone",
           resonator : "tub",
-          toneCiphers : [-1,1,2,3,5,6,8],
-          octave : [1,2,2,2,2,2,4],
+          notes : [-1,1,2,3,5,6,8],
+          octave : [4,5,5,5,5,5,6],
           stretch : 1,
           transpose : 1,
           detune : [1.003,1.005,1.008,1.003,1.005,1.002,1.006],
+          ampSamp : [0.09,[0.09,0.09,0.09,0.09,0.09,0.09,0.09]],
           amp : [0.09,0.09,0.09,0.09,0.09,0.09,0.09],
           attack : [1,1,1,1,1,1,1],
           decay : [1500,1500,1500,1500,1500,1500,1500],
@@ -2095,11 +2116,12 @@ gamelan = {
           use : true,
           type : "metallophone",
           resonator : "tub",
-          toneCiphers : [-1,1,2,3,5,6,8],
-          octave : [0.5,1,1,1,1,1,2],
+          notes : [-1,1,2,3,5,6,8],
+          octave : [3,4,4,4,4,4,5],
           stretch : 1,
           transpose : 1,
           detune : [1.006,1.004,1.007,1.003,1.005,1.004,1.005],
+          ampSamp : [0.1,[0.1,0.1,0.1,0.1,0.1,0.1,0.1]],
           amp : [0.1,0.1,0.1,0.1,0.1,0.1,0.1],
           attack : [1,1,1,1,1,1,1],
           decay : [2500,2500,2500,2500,2500,2500,2500],
@@ -2112,11 +2134,12 @@ gamelan = {
           use : true,
           type : "metallophone",
           resonator : "tub",
-          toneCiphers : [-1,1,2,3,5,6,8],
-          octave : [0.25,0.5,0.5,0.5,0.5,0.5,1],
+          notes : [-1,1,2,3,5,6,8],
+          octave : [2,3,3,3,3,3,4],
           stretch : 1,
           transpose : 1,
           detune : [1.002,1.003,1.004,1.005,1.004,1.006,1.004],
+          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
           amp : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
           attack : [1,1,1,1,1,1,1],
           decay : [5000,5000,5000,5000,5000,5000,5000],
@@ -2129,11 +2152,12 @@ gamelan = {
           use : true,
           type : "gong",
           resonator : "body",
-          toneCiphers : [8],
-          octave : [4],
+          notes : [8],
+          octave : [6],
           stretch : 1,
           transpose : 1,
           detune : [1.01],
+          ampSamp : [0.1,[0.1]],
           amp : [0.1],
           attack : [1],
           decay : [800],
@@ -2146,11 +2170,12 @@ gamelan = {
           use : true,
           type : "gong",
           resonator : "body",
-          toneCiphers : [2],
-          octave : [0.5],
+          notes : [2],
+          octave : [4],
           stretch : 1,
           transpose : 1,
           detune : [1.05],
+          ampSamp : [0.15,[0.15]],
           amp : [0.15],
           attack : [100],
           decay : [300],
@@ -2163,11 +2188,12 @@ gamelan = {
           use : true,
           type : "gong",
           resonator : "body",
-          toneCiphers : [3,5,6,8,9],
-          octave : [0.25,0.25,0.25,0.5,0.5], // [sic!] this reorders the gongs
+          notes : [3,5,6,8,9],
+          octave : [2,2,2,3,3], // [sic!] this reorders the gongs
           stretch : 1,
           transpose : 1,
           detune : [1.002,1.003,1.004,1.005,1.004],
+          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15]],
           amp : [0.15,0.15,0.15,0.15,0.15],
           attack : [80,80,80,80,80],
           decay : [4000,4000,4000,4000,4000],
@@ -2180,11 +2206,12 @@ gamelan = {
           use : true,
           type : "gong",
           resonator : "body",
-          toneCiphers : [2,3,5,6,8],
-          octave : [1,1,1,1,2],
+          notes : [2,3,5,6,8],
+          octave : [4,4,4,4,5],
           stretch : 1,
           transpose : 1,
           detune : [1.002,1.003,1.004,1.005,1.004],
+          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15]],
           amp : [0.15,0.15,0.15,0.15,0.15],
           attack : [2,2,2,2,2],
           decay : [3000,3000,3000,3000,3000],
@@ -2197,11 +2224,12 @@ gamelan = {
           use : false,
           type : "gong",
           resonator : "body",
-          toneCiphers : [1,2],
-          octave : [0.25,0.25],
+          notes : [1,2],
+          octave : [2,2],
           stretch : 1,
           transpose : 1,
           detune : [0.99,0.99],
+          ampSamp : [0.1,[0.1,0.1]],
           amp : [0.1,0.1],
           attack : [80,80],
           decay : [5000,5000],
@@ -2219,11 +2247,12 @@ gamelan = {
           use : true,
           type : "gong chimes",
           resonator : "body",
-          toneCiphers : [-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7],
-          octave : [2,2,2,2,2,2,2,4,4,4,4,4,4,4],
+          notes : [-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7],
+          octave : [5,5,5,5,5,5,5,6,6,6,6,6,6,6],
           stretch : 1,
           transpose : 1,
           detune : [1.005,1.004,1.005,1.008,1.006,1.005,1.006,1.007,1.005,1.007,1.008,1.007,1.006,1.007],
+          ampSamp : [0.04,[0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04]],
           amp : [0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [300,300,300,300,300,300,300,300,300,300,300,300,300,300],
@@ -2236,11 +2265,12 @@ gamelan = {
           use : true,
           type : "gong chimes",
           resonator : "body",
-          toneCiphers : [-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7],
-          octave : [1,1,1,1,1,1,1,2,2,2,2,2,2,2],
+          notes : [-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7],
+          octave : [4,4,4,4,4,4,4,5,5,5,5,5,5,5],
           stretch : 1,
           transpose : 1,
           detune : [1.004,1.006,1.005,1.007,1.005,1.003,1.004,1.004,1.006,1.005,1.007,1.005,1.003,1.004],
+          ampSamp : [0.12,[0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12]],
           amp : [0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [800,800,800,800,800,800,800,800,800,800,800,800,800,800],
@@ -2253,11 +2283,12 @@ gamelan = {
           use : true,
           type : "metallophone",
           resonator : "tub",
-          toneCiphers : [1,2,3,4,5,6,7],
-          octave : [4,4,4,4,4,4,4],
+          notes : [1,2,3,4,5,6,7],
+          octave : [6,6,6,6,6,6,6],
           stretch : 1,
           transpose : 1,
           detune : [1.007,1.008,1.009,1.005,1.007,1.006,1.008],
+          ampSamp : [0.08,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
           amp : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
           attack : [1,1,1,1,1,1,1],
           decay : [600,600,600,600,600,600,600],
@@ -2270,11 +2301,12 @@ gamelan = {
           use : true,
           type : "metallophone",
           resonator : "tub",
-          toneCiphers : [1,2,3,4,5,6,7],
-          octave : [2,2,2,2,2,2,2],
+          notes : [1,2,3,4,5,6,7],
+          octave : [5,5,5,5,5,5,5],
           stretch : 1,
           transpose : 1,
           detune : [1.005,1.003,1.004,1.004,1.006,1.005,1.007],
+          ampSamp : [0.08,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
           amp : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
           attack : [1,1,1,1,1,1,1],
           decay : [1300,1300,1300,1300,1300,1300,1300],
@@ -2287,11 +2319,12 @@ gamelan = {
           use : true,
           type : "metallophone",
           resonator : "tub",
-          toneCiphers : [1,2,3,4,5,6,7],
-          octave : [2,2,2,2,2,2,2],
+          notes : [1,2,3,4,5,6,7],
+          octave : [5,5,5,5,5,5,5],
           stretch : 1,
           transpose : 1,
           detune : [1.003,1.005,1.008,1.003,1.005,1.002,1.006],
+          ampSamp : [0.09,[0.09,0.09,0.09,0.09,0.09,0.09,0.09]],
           amp : [0.09,0.09,0.09,0.09,0.09,0.09,0.09],
           attack : [1,1,1,1,1,1,1],
           decay : [1500,1500,1500,1500,1500,1500,1500],
@@ -2304,11 +2337,12 @@ gamelan = {
           use : true,
           type : "metallophone",
           resonator : "tub",
-          toneCiphers : [1,2,3,4,5,6,7],
-          octave : [1,1,1,1,1,1,1],
+          notes : [1,2,3,4,5,6,7],
+          octave : [4,4,4,4,4,4,4],
           stretch : 1,
           transpose : 1,
           detune : [1.006,1.004,1.007,1.003,1.005,1.004,1.005],
+          ampSamp : [0.1,[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]],
           amp : [0.1,0.1,0.1,0.1,0.1,0.1,0.1],
           attack : [1,1,1,1,1,1,1],
           decay : [2500,2500,2500,2500,2500,2500,2500],
@@ -2321,11 +2355,12 @@ gamelan = {
           use : true,
           type : "metallophone",
           resonator : "tub",
-          toneCiphers : [1,2,3,4,5,6,7],
-          octave : [0.5,0.5,0.5,0.5,0.5,0.5,0.5],
+          notes : [1,2,3,4,5,6,7],
+          octave : [3,3,3,3,3,,3,3],
           stretch : 1,
           transpose : 1,
           detune : [1.002,1.003,1.004,1.005,1.004,1.006,1.004],
+          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
           amp : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
           attack : [1,1,1,1,1,1,1],
           decay : [5000,5000,5000,5000,5000,5000,5000],
@@ -2338,11 +2373,12 @@ gamelan = {
           use : true,
           type : "gong",
           resonator : "body",
-          toneCiphers : [6],
-          octave : [2],
+          notes : [6],
+          octave : [5],
           stretch : 1,
           transpose : 1,
           detune : [1.01],
+          ampSamp : [0.15,[0.15]],
           amp : [0.15],
           attack : [1],
           decay : [800],
@@ -2355,11 +2391,12 @@ gamelan = {
           use : true,
           type : "gong",
           resonator : "body",
-          toneCiphers : [6],
-          octave : [0.5],
+          notes : [6],
+          octave : [3],
           stretch : 1,
           transpose : 1,
           detune : [1.01],
+          ampSamp : [0.1,[0.1]],
           amp : [0.1],
           attack : [100],
           decay : [300],
@@ -2372,11 +2409,12 @@ gamelan = {
           use : true,
           type : "gong",
           resonator : "body",
-          toneCiphers : [3,5,6,7,8,9],
-          octave : [0.25,0.25,0.25,0.25,0.5,0.5], // [sic!] this reorders the gongs
+          notes : [3,5,6,7,8,9],
+          octave : [3,3,3,3,4,4], // [sic!] this reorders the gongs
           stretch : 1,
           transpose : 1,
           detune : [1.002,1.003,1.004,1.005,1.004,1.006],
+          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15,0.15]],
           amp : [0.15,0.15,0.15,0.15,0.15,0.15],
           attack : [80,80,80,80,80,80],
           decay : [4000,4000,4000,4000,4000,4000],
@@ -2389,11 +2427,12 @@ gamelan = {
           use : true,
           type : "gong",
           resonator : "body",
-          toneCiphers : [2,3,5,6,7,8,9],
-          octave : [1,1,1,1,1,2,2],
+          notes : [2,3,5,6,7,8,9],
+          octave : [4,4,4,4,4,5,5],
           stretch : 1,
           transpose : 1,
           detune : [1.002,1.003,1.004,1.005,1.004,1.006,1.004],
+          ampSamp : [0.15,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
           amp : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
           attack : [2,2,2,2,2,2,2],
           decay : [3000,3000,3000,3000,3000,3000,3000],
@@ -2406,11 +2445,12 @@ gamelan = {
           use : false,
           type : "gong",
           resonator : "body",
-          toneCiphers : [1,2],
-          octave : [0.25,0.25],
+          notes : [1,2],
+          octave : [2,2],
           stretch : 1,
           transpose : 1,
           detune : [0.99,0.99],
+          ampSamp : [0.1,[0.1,0.1]],
           amp : [0.1,0.1],
           attack : [80,80],
           decay : [5000,5000],
@@ -2427,34 +2467,36 @@ gamelan = {
           use : true,
           type : "gong",
           resonator : "body",
-          toneCiphers : [2,3,5,6],
-          octave : [0.125,0.125,0.125,0.125],
+          notes : [3,5,6],
+          octave : [1,1,1],
           stretch : 1,
           transpose : 1,
-          detune : [0.95,0.95,0.95,0.95],
-          amp : [0.35,0.35,0.35,0.35],
-          attack : [100,100,100,100],
-          decay : [7000,7000,7000,7000],
+          detune : [0.95,0.95,0.95],
+          ampSamp : [0.35,[0.35,0.35,0.35]],
+          amp : [0.35,0.35,0.35],
+          attack : [100,100,100],
+          decay : [7000,7000,7000],
           waveShape : ["triangle"],
           fmPriority : 1,
-          fm : [[2.01,1],[2.01,1],[2.01,1],[2.01,1]], // [cmRatio,index]
-          beat : [[1.2,0.02],[1.2,0.02],[1.2,0.02],[1.2,0.02]], // [frequency,subtractor]
+          fm : [[2.01,1],[2.01,1],[2.01,1]], // [cmRatio,index]
+          beat : [[1.2,0.02],[1.2,0.02],[1.2,0.02]], // [frequency,subtractor]
           residuum : [1,50,"pulse",0.15], // added synth-properties
           effectBus : ["gongs",0.5]
         },
-        kendhang : { // there are several kendhang types. In two cases two kendhang play together, could be both with two or one players
+        kdhKalih : {
           use : false,
           type : "drums",
-          toneCiphers : ["b","p","t","k","o","a"],
-          toneNames : ["dah","thung","tak","ket","thong","tap"],
+          notes : ["b","p","t","k","o","a","r"],
+          toneNames : ["dhah","thung","tak","ket","thong","tap","kret"],
           transpose : 1,
-          frequency : [120,360,500,500,420,500],
-          amp : [0.2,0.2,0.2,0.2,0.1,0.2],
-          attack : [20,5,1,1,2,1],
-          decay : [2000,1000,100,50,1000,20],
-          waveShape : ["sine","sine","square","sawtooth","pulse","sawtooth"],
-          cmRatio : [1 + Math.sqrt(2),1 + Math.sqrt(2),5,2,2,2],
-          index : [1,1,1,1,1,1],
+          frequency : [120,360,500,500,420,500,500], // why fantasy?
+          ampSamp : [0.2,[0.2,0.2,0.2,0.2,0.1,0.2,0.2]],
+          amp : [0.2,0.2,0.2,0.2,0.1,0.2,0.2],
+          attack : [20,5,1,1,2,1,1],
+          decay : [2000,1000,100,50,1000,20,50],
+          waveShape : ["sine","sine","square","sawtooth","pulse","sawtooth","pulse"],
+          cmRatio : [1 + Math.sqrt(2),1 + Math.sqrt(2),5,2,2,2,2],
+          index : [1,1,1,1,1,1,1],
           effectBus : ["gongs",0.5]
         }
       }
@@ -2467,8 +2509,8 @@ gamelan = {
 // gamelan.generic
 gamelan.generic.pelog.instruments.gong = gamelan.generic.neutral.instruments.gong;
 gamelan.generic.slendro.instruments.gong = gamelan.generic.neutral.instruments.gong;
-gamelan.generic.pelog.instruments.kendhang = gamelan.generic.neutral.instruments.kendhang;
-gamelan.generic.slendro.instruments.kendhang = gamelan.generic.neutral.instruments.kendhang;
+gamelan.generic.pelog.instruments.kdhKalih = gamelan.generic.neutral.instruments.kdhKalih;
+gamelan.generic.slendro.instruments.kdhKalih = gamelan.generic.neutral.instruments.kdhKalih;
 
 // NYAGA (MUSICIANS) ###########################################################
 
@@ -2694,4 +2736,302 @@ nyaga = {
       fanciness : 1,
       sex : "female"
   }
+};
+startingTheEngines = function() {
+  scales = []; iNames = []; pNames = [];
+  var ensemble = now.instruments;
+  var ix = 0;
+  for (var iName in ensemble) {
+    var instr = ensemble[iName];
+    if (instr.use) {
+      var cap = iName.charAt(0).toUpperCase()+iName.slice(1)
+      window["ix"+cap] = ix;
+      iNames.push(iName);
+      if (iName===flags.bukaInstr) { window["ixBukaInstr"] = ix; }
+      if (iName===conf.timeKeeper) { window["ixTimeKeeper"] = ix; }
+      scales.push((instr.frequency) ? instr.frequency : instrFrequencies(instr));
+      for (var pName in nyaga) {
+        if (nyaga[pName].ricikan === iName) { pNames.push(pName); break; }
+      }
+      // prepare Samplers (to be callable by instrumentName)
+      window[cap] = Function("_sequence", "_timeValue", "_amp", "_freq", "return new _sampler('"+iName+"', _sequence, _timeValue, _amp, _freq)");
+      ix++;
+    }
+  }
+  instrCnt = ix;
+  parts = []; synths = [];
+  for (var i=0;i<instrCnt;i++) {
+  // create Synth-Dummies
+    synths.push(Synth()); // synths.push(Synth({ active : false }).out())
+  //  if (instr.effectBus) { synths[ix].send(instr.effectBus[0],instr.effectBus[1]); }
+  }
+  // push part-definitions to array "parts" ####################################
+  partsGen();
+
+// window[iName] = function(_sequence, _timeValue, _amp, _freq) { return new _sampler(eval(iNames[ix]), _sequence, _timeValue, _amp, _freq); };
+
+  // generate SHORTHANDS for found parts #######################################
+  for (var i=0;i<instrCnt;i++) {
+    var iName = iNames[i];
+    window["p"+i] = parts[i];
+    window["s"+i] = synths[i];
+    switch (iName) {
+      case "bonangPan" : bp = parts[i]; sbp = synths[i]; break;
+      case "bonangBar" : bb = parts[i]; sbb = synths[i]; break;
+      case "peking" : pk = parts[i]; spk = synths[i]; break;
+      case "saronA" : sa = parts[i]; ssa = synths[i]; break;
+      case "saronB" : sb = parts[i]; ssb = synths[i]; break;
+      case "demung" : dm = parts[i]; sdm = synths[i]; break;
+      case "slenthem" : sl = parts[i]; ssl = synths[i]; break;
+      case "kempyang" : py = parts[i]; spy = synths[i]; break;
+      case "kethuk" : kt = parts[i]; skt = synths[i]; break;
+      case "kempul" : kp = parts[i]; skp = synths[i]; break;
+      case "kenong" : kn = parts[i]; skn = synths[i]; break;
+      case "gongSuw" : gs = parts[i]; sga = synths[i]; break;
+      case "gong" : ga = parts[i]; sga = synths[i]; break;
+      case "kendhang" : kd = parts[i]; skd = synths[i];
+    };
+    if (iName===flags.bukaInstr) { bi = parts[i]; sbi = synths[i]; };
+    if (iName===conf.timeKeeper) { tk = parts[i]; stk = synths[i]; };
+  }
+  // PLAYER Convenience ##########################################################
+  doForAll = function(action,counter) {
+    counter = counter || tk.counter || 1;
+    var partsCnt = parts.length;
+    for (var i=0;i<partsCnt;i++) {
+      if (action === "play") {
+        parts[i].counter = counter;
+        parts[i].play();
+      } else if (action === "once") {
+        parts[i].counter = counter;
+        parts[i].once();
+      } else if (action === "pause") {
+        parts[i].pause();
+      } else if (action === "stop") {
+        parts[i].stop();
+      } else if (action === "kill") { // kill does not make much sense as you can\'t restart yet
+        parts[i].kill();
+      }
+    }
+    var result = "Action \'"+action+"\' executed for all parts";
+    return result;
+  }
+  gendhing = {
+    play : function(counter) { doForAll("play",counter); if ( toggle.logBranching && flags.segment === "buka") { console.log(msg.console.onStartPlaying); } return msg.returnInfo.allPlay(); },
+    once : function(counter) { doForAll("once",counter); return msg.returnInfo.allOnce() },
+    pause : function(counter) { doForAll("pause",counter); return msg.returnInfo.allPause() },
+    stop : function(counter) { doForAll("stop",counter); return msg.returnInfo.allStop() },
+    kill : function(counter) { doForAll("kill",counter); return msg.returnInfo.allKill() }
+  }
+  return "scales, synths, samplers, parts, iNames (instruments), pNames (persons) and busses prepared..." // To play bonang barung type bb.play(). To play everyting type gendhing.play()";
+};
+
+takeOff = function() {
+// #############################################################################
+  var ppGongan = now.pp.gongan;
+  var ppBuka = now.pp.buka;
+  // additive orientation
+  var ppKenongan = now.pp.kenongan;
+  var ppKempulan = now.pp.kempulan;
+  var ppKethukan = now.pp.kethukan;
+  var ppKempyangan = now.pp.kempyangan;
+  var ppGatra = now.pp.gatra;
+  var ppTiba = now.pp.tiba;
+  var ppSabet = now.pp.sabet;
+  var fullPeriod = ppGongan;
+  // subdivisional orientation
+  var halph = fullPeriod/2;
+  var quarter = fullPeriod/4;
+  var _8th = fullPeriod/8;
+  var _16th = fullPeriod/16;
+  var _32nd = fullPeriod/32;
+  var _64th = fullPeriod/64;
+
+  nthGong = (flags.segment==="buka") ? 0 : (flags.segment==="umpak") ? 1 : (flags.segment==="ngelik") ? 3 : alert("Not sure how to initialize nthGong - you seem to use a unusual segment designation. Check variables flags.segment and nthGong") ;
+  nthNong = 0; nthPul = 0; nthThuk = 0; nthPyang = 0;
+  nthGatra = 1; nthSabet = 0; keteg = 1;
+  ticker = (flags.segment==="buka") ? 1 : ppBuka ;
+  gdhNotation = kar.protoBal(now.balungan); // called from a message-function - thus global
+
+  onGong = function() {
+    nthGong++;
+    if (toggle.logGongan) { console.log(msg.console.onGong()); }
+    nthNong = 1; nthPul = 0; nthThuk = 0; nthPyang = 0; // reset relative counters
+    nthGatra = 1; nthSabet = 0; keteg = 1; // rethink exactly whether to reset gPulse to 0 manually or not
+    kar.branching(); // trigger settings for gongan to come
+    fullPeriod = now.pp.gongan; // reset orientational variables in case gongan changed
+    halph = fullPeriod/2;
+    quarter = fullPeriod/4;
+    _8th = fullPeriod/8;
+    _16th = fullPeriod/16;
+    _32nd = fullPeriod/32;
+    _64th = fullPeriod/64;
+    gdhNotation = kar.protoBal(now.balungan);
+  }
+  parts.push(
+    Seq({
+      active : false,
+      function : [ function() {
+        gPulse = parts[ixTimeKeeper].counter; // reset to 0 on each stop()
+        if (gPulse % now.pp.keteg===0) { keteg++ }; // keteg is useful but not used yet
+        ticker++
+      }],
+      durations : [_32]
+    })
+  );
+  orientation = parts[parts.length-1];
+  parts.push(
+    Seq({
+      active : false,
+      function : [
+        function() {
+          // sabet/pyang: ------------------------------------------------------
+          if (gPulse % _32nd === 0) {
+            nthSabet++
+            if (gPulse % _16th !==0) {
+              nthPyang++;
+              if (toggle.logGongan) {console.log(msg.console.onKempyang());}
+            }
+            // tiba/thuk: ------------------------------------------------------
+            if (gPulse % _16th === 0) {
+              if (gPulse===ppBuka && flags.segment === "buka") { onGong(); }
+              if (gPulse % _8th !== 0) {
+                nthThuk++;
+                if (toggle.logGongan) {console.log(msg.console.onKethuk());}
+              }
+              // gatra/pul: ----------------------------------------------------
+              if (gPulse % _8th === 0) {
+                if ((gPulse % quarter !== 0) && (gPulse !== ppGatra)) {
+                  nthPul++;
+                  if (toggle.logGongan) {console.log(msg.console.onKempul());}
+                  if (toggle.logGongan) {console.log("\n");}
+                } else if (gPulse === ppGatra) {
+                  if (toggle.logGongan) {console.log(msg.console.onWela()); }
+                  if (toggle.logGongan) {console.log("\n"); }
+                }
+                if (gPulse % quarter === 0) {
+                  // Here go things on kenong-level
+                  if ((gPulse % fullPeriod !== 0) && (ticker !== ppBuka)) {
+                    if (toggle.logGongan) { console.log( msg.console.onKenong()); }
+                    if (toggle.logGongan) { console.log("\n"); }
+                    nthNong++;
+                  }
+                  if (gPulse % halph === 0) {
+                    // Here go things on halph-gong-level
+                    if (gPulse % fullPeriod === 0) {
+                      onGong();
+                    }
+                  }
+                }
+                nthGatra++;
+              }
+            }
+          }
+        }
+      ],
+      durations : [_32]
+    })
+  )
+  gongan = parts[parts.length-1]
+  if (toggle.watchDogs) {
+    var decideUponNgelikBranch = ppGongan-ppGatra;
+    var favoredIramaSwitch = ppTiba;
+    var favoredReturnToSteadyIrI = ppTiba;
+    var favoredReturnToSteadyIrII = ppTiba;
+    var favoredFinalSlowDown = ppGongan-(ppSabet*10);
+    var startSuwukPossibleMin = ppGatra*3;
+    var startSuwukPossibleMinEndNgampat = startSuwukPossibleMin+8;
+    var startSuwukPossibleMax = ppGatra*5;
+    var startSuwukPossibleMaxEndNgampat = startSuwukPossibleMax+8;
+    parts.push(
+      Seq({
+        active : false,
+        function : [function() {
+        // speed-change
+        if (flags.seseg || flags.rem) { kar.seseg(); }
+        // invoke ngelik-signal
+        if ( !toggle.autoPilot && flags.goToNgelik && gPulse === decideUponNgelikBranch) {
+            partSet(ixBonangPan,flags.segment,flags.irama);
+            partSet(ixBonangBar,flags.segment,flags.irama);
+            console.log(msg.console.onWatchDogTriggerNgelikSignal)
+        }
+        // speed guard
+        if (flags.fastForward === false && ( pulseUnit < par.tooFast || (pulseUnit > par.tooSlow && !flags.isGonganSuwuk)) ) {
+          kar.jadi();
+          if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
+        }
+        // iramaSwitch up (slow->fast)
+        if (flags.seseg && !flags.doSuwuk && flags.irama === "irII" && pulseUnit < par.thresholdTanggung && gPulse % favoredIramaSwitch === 0 ) {
+          kar.irama("irI");
+          if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToIrI()); }
+        }
+        if (flags.seseg && !flags.doSuwuk && flags.irama === "irI" && pulseUnit < (par.thresholdTanggung-par.bufferTanggung) && gPulse % favoredReturnToSteadyIrI === 0 ) {
+          kar.jadi();
+          if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
+        }
+        // iramaSwitch down (fast->slow)
+        if (flags.rem && !flags.doSuwuk && flags.irama === "irI" && pulseUnit > (par.thresholdDadi) && (gPulse % favoredIramaSwitch === 0) ) {
+          kar.irama("irII");
+          if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToIrII()); }
+        }
+        if (flags.rem && !flags.doSuwuk && flags.irama === "irII" && pulseUnit > (par.thresholdDadi+par.bufferDadi) && (gPulse % favoredReturnToSteadyIrII === 0) ) {
+          kar.jadi();
+          if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
+        }
+        // suwuk (needs much work)
+        if (flags.doSuwuk) {
+          switch (true) {
+            case gPulse === startSuwukPossibleMin || ((gPulse === startSuwukPossibleMax) && !flags.isGonganSuwuk) :
+              partSet(ixKendhang,"suwuk"); // there will be more going on in a nice suwuk
+              kar.nyeseg(10);
+              flags.isGonganSuwuk = true; // for now suwuks that span one gongan
+              flags.ngampat = true;
+              if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogReinforceSuwukMode); }
+              break;
+            case ((gPulse === startSuwukPossibleMinEndNgampat) && flags.ngampat) || ((gPulse === startSuwukPossibleMaxEndNgampat) && flags.ngampat && !flags.habisNgampat) :
+              kar.jadi();
+              flags.habisNgampat = true;
+              if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
+              break;
+            case gPulse === favoredFinalSlowDown :
+              kar.nyuwuk();
+              if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToFinalSlowdown); }
+              break;
+            case flags.isGonganSuwuk === true && gPulse === 1 &&
+              ((flags.irama === "irI" && pulseUnit > par.suwukThresholdIrI) || (flags.irama === "irII" && pulseUnit > par.suwukThresholdIrII)) :
+              kar.gongSuwuk();
+              if (toggle.logWatchDogs) { console.log(msg.console.onGongSuwuk); }
+            break;
+          }
+        }
+      }],
+      durations : [_32] })
+    )
+    watchDogs = wd = parts[parts.length-1];
+  }
+  if (toggle.autoPilot) {
+    var startSlowDownDuringBuka = ppBuka-(2*ppGatra);
+    var stopSlowDownAfterBuka = ppTiba;
+    var iramaDownIn1stKenongan = ppSabet*2;
+    var iramaUpIn3rdKenongan = ppKenongan*2;
+    var iramaDownIn3rdKenongan = ppKenongan*2;
+    var startSuwukMode = ppGatra*2;
+    parts.push(
+      Seq({
+        active : false,
+        function : [ function() {
+        switch (true) {
+          case nthGong === 0 && gPulse === startSlowDownDuringBuka : kar.ngerem(1.5); if (toggle.logAutoPilot) { console.log(msg.console.onAutoSlowDown()); } break;
+          case nthGong === 1 && gPulse === stopSlowDownAfterBuka : kar.jadi(); if (toggle.logAutoPilot) { console.log(msg.console.onAutoSteadySpeed()); } break;
+          case nthGong === 2 && gPulse === iramaDownIn1stKenongan : kar.ngerem(2.5); if (toggle.logAutoPilot) { console.log(msg.console.onAutoSlowDown()); } break;
+          case nthGong === 4 && gPulse === iramaUpIn3rdKenongan : kar.nyeseg(); if (toggle.logAutoPilot) { console.log(msg.console.onAutoSpeedUp()); } break;
+          case nthGong === 6 && gPulse === iramaDownIn3rdKenongan : kar.ngerem(); if (toggle.logAutoPilot) { console.log(msg.console.onAutoSlowDown()); } break;
+          case nthGong === 7 && gPulse === startSuwukMode : flags.doSuwuk = true; if (toggle.logAutoPilot) { console.log(msg.console.onAutoSetSuwukFlag); } break;
+        }
+      }],
+      durations : [_32] })
+    )
+    autoPilot = ap = parts[parts.length-1];
+  }
+  return "... welcome to gendhing. You are almost there. Type gendhing.play() or make your choices first. (not much for now, though ;))";
 };

@@ -150,14 +150,14 @@ _Drums.prototype = {
 	category  	: "complex",
 	name  		: "Drums",
 		
-	load : function (){
-		// SAMPLES ARE PRELOADED IN GIBBER CLASS... but it still doesn't stop the hitch when loading these...
-		this.kick.loadWav(Gibber.samples.kick);
-		this.snare.loadWav(Gibber.samples.snare);
-		this.hat.loadWav(Gibber.samples.snare); // TODO: CHANGE TO HIHAT SAMPLE
-				
-		this.initialized = true;
-	},
+//	load : function (){
+//		// SAMPLES ARE PRELOADED IN GIBBER CLASS... but it still doesn't stop the hitch when loading these...
+//		this.kick.loadWav(Gibber.samples.kick);
+//		this.snare.loadWav(Gibber.samples.snare);
+//		this.hat.loadWav(Gibber.samples.snare); // TODO: CHANGE TO HIHAT SAMPLE
+//				
+//		this.initialized = true;
+//	},
 		
 	replace : function(replacement) {
 		this.kill();

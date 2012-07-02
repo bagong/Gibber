@@ -175,18 +175,11 @@ define(['gibber/audio_callback',
 		
 			this.initDurations();
 
-			this.samples = { // preload
-					kick : atob(samples.kick),
-					snare : atob(samples.snare),
-					bem : atob(samples.bem),
-					thung : atob(samples.thung),
-					tak : atob(samples.tak),
-					ket : atob(samples.ket),
-					thong : atob(samples.thong),
-					tap : atob(samples.tap),
-					kret : atob(samples.kret)
-					//hat : atob(samples.snare)
-			};
+//			this.samples = { // preload
+//					kick : atob(samples.kick),
+//					snare : atob(samples.snare),
+//					//hat : atob(samples.snare)
+//			};
 		
 			this.callback = new Callback();
 
