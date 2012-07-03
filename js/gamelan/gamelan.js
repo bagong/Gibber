@@ -16,7 +16,7 @@ conf = { // these settings can change (that are the plans ;)), but they are more
   soMode : true, // if false, balungan-notation will be used with minimal processing (just cleaning) (mind beginning of ngelik!)
   pulseMode : true, // pulseMode creates durations from a mini-Pulse while propMode or dursMode uses individual durations for each note (the later doesn't work well yet, problems with offset, but is probably more consistent on the long run)
   audioHost : "http://localhost",
-  audioPath : "gibber/js/gamelan/audiofiles",
+  audioPath : "gamelan/audiofiles",
   useSamples : true
 };
 par = {
