@@ -1,4 +1,4 @@
-// GibberGamelan _Sampler is derived from Drums(). It isused to provide a
+// GibberGamelan _Sampler is derived from Drums(). It is used to provide a
 // samplesSequencer for all instruments in the Gamelan. It is called when
 // synths parts etc. are generated (see startingTheEngines()).
 // Loading an instrument will only work, if all required samples are available
@@ -8,6 +8,7 @@
 // - can process both string- and array-sequences as _sequence parameter
 // - processes a masterAmp for the instrument and separate amp for each sample (to adjust poorly leveled samples)
 // - processes a masterPitch for the instrument and a separate pitch for each samples (allow for a "detune" from instrData)
+// - calles a notation-parser processing either drumming or cipher-notation
 // The handling/use of frequency is not clear yet to me, but looks interesting.
 // Not sure how to handle the samples. Currently they are (360MB). This could
 // probably be brought down some 50% by editing. But even 180 is a looot
@@ -15,11 +16,11 @@
 // Probably users should have the opportunity to download the samples in advance...
 // This is not robust yet, but it has a nice potential
 
-function _SampleSeq (instrName, _sequence, _timeValue, _amp, _freq) {
+function _SampleSeq (instrName, _sequence, _timeValue, _amp, _pitch) { // as freq isn't used we might as well introduce pitch as parameter?
 
+  this.name = instrName;
   this.amp = isNaN(_amp) ?  1 : _amp;
   this.instrAmp = now.instruments[instrName].ampSamp;
-  this.pitch = 1;
   this.instrPitch = now.instruments[instrName].detuneSamp;
 
   this.larasSamples = (instrName==="kdhKalih" || instrName==="kdhCiblon" || instrName==="kdhGendhing" || instrName==="kdhKetipung" || instrName==="gong") ? "neutral" : now.laras ;
@@ -48,10 +49,20 @@ function _SampleSeq (instrName, _sequence, _timeValue, _amp, _freq) {
 
   this.bus.connect(Master);
 
-  this.frequency = isNaN(_freq) ? 440 : _freq;
+  Gibberish.extend(this, this.sounds);
+
+  this.fx = this.bus.fx;
+
+  // this enables this.noteName.pitch = 2, this.noteName.fx.add( Reverb() ) etc.
+  for (var k=0;k<this.notesCnt;k++) {
+    var noteName = (typeof this.notes[k]==="number") ? jirolu(this.notes[k]) : taktak(this.notes[k]);
+    this[noteName] = this.sounds[noteName];
+    this[noteName].fx = this.sounds[noteName].sampler.fx;
+  }
 
   this.active = true;
   this.masters = [];
+  this.pitch = _pitch || 1; // pitch is a mod to frequency
 
   this.sequenceInit =false;
   this.initialized = false;
@@ -101,7 +112,6 @@ function _SampleSeq (instrName, _sequence, _timeValue, _amp, _freq) {
     }
   }
 
-  //this.seq = {};
   (function(obj) {
     var that = obj;
     Object.defineProperties(that, {
@@ -127,11 +137,18 @@ function _SampleSeq (instrName, _sequence, _timeValue, _amp, _freq) {
             this.sounds[sound].sampler.send(this.bus, amp*this.sounds[sound].amp);
           }
         }
-      } // pitch is constantly recalculated anyways on each advance of the Seq, it seems (see function note below)
+      }
     });
   })(this);
 
   if(this.seq !== null) {
+    // more sugar to let SampleSeq appear like normal Seq
+    // for some reason I connot do this with a for (propery in this.seq)-loop;
+    // see also prototype for play, stop etc... is that feasible or might it have side-effects?
+    this.counter = this.seq.counter;
+    this.durations = this.seq.durations;
+    this.durationsCounter = this.seq.durationCounter;
+    this.humanize = this.seq.humanize;
     this.seq.doNotAdvance = false;
     this.seq.advance();
   }
@@ -140,7 +157,7 @@ function _SampleSeq (instrName, _sequence, _timeValue, _amp, _freq) {
 _SampleSeq.prototype = {
   sampleRate : 44100, //Gibber.sampleRate,
   type  : "complex",
-  name  : "Sampler",
+  name  : "SampleSeq",
 
   replace : function(replacement) {
     if(typeof this.seq != "undefined") {
@@ -171,6 +188,11 @@ _SampleSeq.prototype = {
     this.seq.once();
     return this;
   },
+  // it will be a bit tyering to maintain these shortcuts but I couldn't find a way
+  // to extend "this" with all functions from this.seq that would work - dunno why.
+  play : function() { this.seq.play(); return this; },
+  stop : function() { this.seq.stop(); return this; },
+  pause : function() { this.seq.pause(); return this; },
 
   retain : function(num) {
     if(isNaN(num)) {
@@ -185,7 +207,7 @@ _SampleSeq.prototype = {
     if (typeof this.seq === "undefined" || this.seq === null) {
       this.seq = Seq(arraySequence, _timeValue).slave(this);
     } else {
-      this.seq.sequences.note = arraySequence; // set(newSequence) - is this line correct? Does seq still use sequences?;
+      this.seq.note = arraySequence; // set(newSequence)
     }
   },
 
