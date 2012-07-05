@@ -18,7 +18,7 @@
 
 function _SampleSeq (instrName, _sequence, _timeValue, _amp, _pitch) { // as freq isn't used we might as well introduce pitch as parameter?
 
-  this.name = instrName;
+  this.name = capFirst(instrName);
   this.amp = isNaN(_amp) ?  1 : _amp;
   this.instrAmp = now.instruments[instrName].ampSamp;
   this.instrPitch = now.instruments[instrName].detuneSamp;
@@ -132,7 +132,6 @@ function _SampleSeq (instrName, _sequence, _timeValue, _amp, _pitch) { // as fre
         set: function(value) {
           var amp = value;
           for(var sound in this.sounds) {
-            console.log("DISCONNECTING", sound);
             this.sounds[sound].sampler.disconnect();
             this.sounds[sound].sampler.send(this.bus, amp*this.sounds[sound].amp);
           }
@@ -145,6 +144,7 @@ function _SampleSeq (instrName, _sequence, _timeValue, _amp, _pitch) { // as fre
     // more sugar to let SampleSeq appear like normal Seq
     // for some reason I connot do this with a for (propery in this.seq)-loop;
     // see also prototype for play, stop etc... is that feasible or might it have side-effects?
+    this.speed = this.seq.speed;
     this.counter = this.seq.counter;
     this.durations = this.seq.durations;
     this.durationsCounter = this.seq.durationCounter;
@@ -156,30 +156,23 @@ function _SampleSeq (instrName, _sequence, _timeValue, _amp, _pitch) { // as fre
 
 _SampleSeq.prototype = {
   sampleRate : 44100, //Gibber.sampleRate,
-  type  : "complex",
-  name  : "SampleSeq",
+  category : "complex",
+  name : "SampleSeq",
 
   replace : function(replacement) {
+    this.kill();
     if(typeof this.seq != "undefined") {
       this.seq.kill();
     }
     for( var i = 0; i < this.masters.length; i++) {
       replacement.masters.push(this.masters[i]);
     }
-    for( var j = 0; j < this.fx.length; j++) {
-      replacement.fx.push(this.fx[j]);
-    }
-    for( var k = 0; k < this.mods.length; k++) {
-      replacement.mods.push(this.mods[k]);
-    }
-    this.kill();
   },
 
   kill : function() {
-    Gibber.genRemove(this);
+    Master.disconnectUgen(this.bus);
+    this.bus.destinations.remove(Master);
     this.masters.length = 0;
-    this.mods.length = 0;
-    this.fx.length = 0;
   },
 
   getMix : function() { return this.value * this.amp; },
