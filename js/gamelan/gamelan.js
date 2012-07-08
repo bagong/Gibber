@@ -7,7 +7,7 @@
 // #############################################################################
 // Global Variables - prevent restrict vis to function
 var parts = [], synths = [], scales = [], iNames = [], pNames = [], now = {},
-instrCnt = 0, gPulse, parts, _32;
+instrCnt = 0, gPulse = 0, pulseUnit, parts;
 conf = { // these settings can change (that are the plans ;)), but they are more low-level than flags.
   irLevels : 2, // pow of 2 for pulses. Speed-levels for now just irI and II irLevels & sdLevels overlap by one.
   sdLevels : 2, // pow of 2. Subdivision-levels relative to irama. ppb is Math.pow(2,(conf.irLevels+conf.sdLevels-1)) - notation-parsers don't support sdLevels:3 yet
@@ -17,7 +17,7 @@ conf = { // these settings can change (that are the plans ;)), but they are more
   pulseMode : true, // pulseMode creates durations from a mini-Pulse while propMode or dursMode uses individual durations for each note (the later doesn't work well yet, problems with offset, but is probably more consistent on the long run)
   audioHost : "http://localhost",
   audioPath : "gamelan/audiofiles",
-  useSamples : true
+  useSamples : false
 };
 par = {
   tooFast : 2500,
@@ -47,17 +47,18 @@ toggle = { // onOff
   lagBuka : false,
   lagGongBuka : false,
   lagGongSuwuk : false,
-  watchDogs : true, // watchdogs do things like trigger irama-switch or set a ngelik-flag and try to keep the piece stable
-  autoPilot : true,
-  logGongan : true,
-  logAutoPilot : true,
-  logBranching : true,
-  logWatchDogs : true,
-  logUserInput : true,
+  watchDogs : false, // watchdogs do things like trigger irama-switch or set a ngelik-flag and try to keep the piece stable
+  autoPilot : false,
+  logGongan : false,
+  logAutoPilot : false,
+  logBranching : false,
+  logWatchDogs : false,
+  logUserInput : false,
 };
 now = { // contextual/temporal information - depend on above values and performance state
   get ppb() { return Math.pow(2,(conf.irLevels+conf.sdLevels-1)) },
-  get beatUnit() { return 4*pulseUnit },
+  get pulseUnit() { return Gibber.sampleRate * 60 / (Gibber.bpm*this.ppb) },
+  get beatUnit() { return 4*this.pulseUnit },
   get bpm() { return (this.beatUnit() === _4) ? init.bpm : (this.beatUnit() === _2) ? init.bpm*2 : (this.beatUnit() === _1) ? init.bpm*4 : alert(msg.alert.beatWarning); }, // This is not used yet. because min-Pulse is _64 beatUnit must adapt if too many irLevels and/or sdLevels are introduced. bpm must adjust accordingly (not tested).
   get laras() { return (flags.pathet.indexOf("p") === 0) ? "pelog" : "slendro"; },
   get balObj() { return notation.balungan[flags.gendhing][flags.form][flags.pathet]; },
@@ -91,8 +92,8 @@ now = { // contextual/temporal information - depend on above values and performa
     kenong : function(n) { return n*now.pp.kenongan }
   },
   pm : {
-    get sabet() { return ((G.sampleRate*60)/(pulseUnit*now.ppb)).toFixed(2) },
-    get keteg() { return ((G.sampleRate*120*kar.irFactor(flags.irama))/(pulseUnit*now.ppb)).toFixed(2) }
+    get sabet() { return ((G.sampleRate*60)/(now.pulseUnit*now.ppb)).toFixed(2) },
+    get keteg() { return ((G.sampleRate*120*kar.irFactor(flags.irama))/(now.pulseUnit*now.ppb)).toFixed(2) }
   }
 };
 // flags for state monitoring (no user-interference expected)
@@ -116,10 +117,11 @@ flags = {
   doSuwuk : false,
   isGonganSuwuk : false
 };
-pulseUnit = (now.ppb === 8) ? _32 : (now.ppb === 16) ? _64 : (now.ppb === 32) ? _64 : (now.ppb === 64) ? _64 : undefined;
-
+// pulseUnit = if (now.ppb === 8) { _32 };// : (now.ppb === 16) ? _64 : (now.ppb === 32) ? _64 : (now.ppb === 64) ? _64 : undefined;
+// if (now.ppb === 8) { alert("It is!"+Gibber.sampleRate+Gibber.bpm); pulseUnit = _32; };// : (now.ppb === 16) ? _64 : (now.ppb === 32) ? _64 : (now.ppb === 64) ? _64 : undefined;
+// alert(now.pulseUnit);
+// var pulseUnit = now.pulseUnit;
 // MESSAGES ####################################################################
-
 msg = {
   console : {
     afterBuka : "Nice buka, we just entered the the first gongan.\nHaven't you always wanted to be here?\n***\nDid you notice the speed-change?\nYou can speed up by typing su() and slow down with sd().\nReturn to steady state with ss().\n\n",
@@ -271,7 +273,7 @@ instrFrequencies = function (iName) {
   for (var i = 0; i < cnt; i++ ) {
     var note = iScale[i];
     var wrap = (note>7) ? note-7 : (note<1) ? note+7 : note; // this allows for 3 octaves (only)
-    scale.push( tuning[nScale.indexOf(wrap)] * globalTrans * instrDetune * tonesDetune[i] * (Math.pow(2,octaveReg[i]-1))/8 * instrStretch * globalStretch); 
+    scale.push( tuning[nScale.indexOf(wrap)] * globalTrans * instrDetune * tonesDetune[i] * ((Math.pow(2,octaveReg[i]-1))/16) * instrStretch * globalStretch); 
   } 
   return scale;
 };
@@ -303,7 +305,7 @@ partGen = function(i,segment,irama,counter,play) {
 partsSet = function(segment,irama,counter,play) {
   segment = segment || flags.segment;
   irama = irama || flags.irama;
-  counter = (counter===0) ? 0 : counter || gPulse%now.pp.gongan;
+  counter = 0; //(counter===0) ? 0 : counter || gPulse%now.pp.gongan;
   play = play || true;
   for (var i=0;i<instrCnt;i++) {
     partSet(i,segment,irama,counter,play);
@@ -316,7 +318,7 @@ partSet = function(i,segment,irama,counter,play) {
   counter = (counter===0) ? 0 : counter || gPulse%now.pp.gongan;
   play = play || true;
   var seqs = part("regen",i,segment,irama,counter,play); // careful! Counter is not well thought out yet. What happens if a part is not regenerated at gong (gPulse != 0))
-  parts[i].counter = counter;
+  parts[i].counter = 1; //counter;
   parts[i].active = play;
   parts[i].note = seqs.frequencies;
   parts[i].durations = seqs.durations;
@@ -375,13 +377,29 @@ part = function(target,iIx,segment,irama,counter,play) {
   for (var i=0;i<cntDegrees;i++) {
     normIx = notes.indexOf(degrees[i]);
     switch (iName) {
-      case "kendhang" : freqs.push(degrees[i]); break;
+      case "kdhKalih" : freqs.push(degrees[i]); break;
       default : (degrees[i] || degrees[i] === 0) ? freqs.push(scale[normIx]) : freqs.push(undefined);
     }
     (conf.pulseMode) ? durs = [pulseUnit] : (cntDurs === 1) ? durs.push(durations[0]) : durs.push(durations[i]);
-    (cntAmps === 1) ? amps.push((ampPart[0]*ampInstr[normIx]*ampPerson) || undefined) : amps.push((ampPart[i]*ampInstr[normIx]*ampPerson) ||  undefined);
-    (cntAttack === 1) ? attacks.push((attackPart[0]*attackInstr[normIx]*attackPerson) || undefined) : attacks.push((attackPart[i]*attackInstr[normIx]*attackPerson) || undefined);
-    (cntDecay === 1) ? decays.push((decayPart[0]*decayInstr[normIx]*decayPerson) || undefined) : decays.push((decayPart[i]*decayInstr[normIx]*decayPerson) || undefined);
+    (cntAmps === 1) ? amps.push((ampPart[0]*ampInstr[0]*ampInstr[1][normIx]*ampPerson) || undefined) : amps.push((ampPart[i]*ampInstr[0]*ampInstr[1][normIx]*ampPerson) ||  undefined);
+    if (cntAttack === 1) {
+      var aNow = (attackPart[0]*attackInstr[normIx]*attackPerson);
+      var aNowExt = (aNow) ? ms(aNow) : undefined;
+      attacks.push(aNowExt);
+    } else {
+      var aNow = attackPart[i]*attackInstr[normIx]*attackPerson;
+      var aNowExt = (aNow) ? ms(aNow) : undefined;
+      attacks.push(aNow);
+    }
+    if (cntDecay === 1) {
+      var dNow = decayPart[0]*decayInstr[normIx]*decayPerson;
+      var dNowExt = (dNow) ? ms(dNow) : undefined;
+      decays.push(dNowExt)
+    } else {
+      var dNow = decayPart[i]*decayInstr[normIx]*decayPerson;
+      var dNowExt = (dNow) ? ms(dNow) : undefined;
+      decays.push(dNowExt)
+    };
     (cntWaveShape === 1) ? waveShapes.push(waveShape[0]) : waveShapes.push(waveShape[normIx]);
   }
   if (target === "generate") {
@@ -1978,7 +1996,7 @@ garap = {
     }
     return { sequence : degrees, durations : durs, amp : amps, attack : [1], decay : [1], offset : lag };
   },
-  kendhang : function(segment,irama) {
+  kdhKalih : function(segment,irama) {
     segment = segment || flags.segment;
     irama = irama || flags.irama;
     var kendhangan = cleanKendhangan(now.kdhObj[irama][segment]);
@@ -2036,7 +2054,7 @@ gamelan = {
           detuneSynth : [1,[1.005,1.004,1.005,1.008,1.006,1.005,1.006,1.007,1.005,1.007,1.008,1.007]],
           detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
-          ampSynth : [0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04],
+          ampSynth : [1,[0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04]],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [300,300,300,300,300,300,300,300,300,300,300,300],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
@@ -2056,7 +2074,7 @@ gamelan = {
           detuneSynth : [1,[1.004,1.006,1.005,1.007,1.005,1.003,1.004,1.004,1.006,1.005,1.007,1.005]],
           detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
-          ampSynth : [0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12],
+          ampSynth : [1,[0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12]],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [800,800,800,800,800,800,800,800,800,800,800,800],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
@@ -2076,7 +2094,7 @@ gamelan = {
           detuneSynth : [1,[1.007,1.008,1.009,1.005,1.007,1.006,1.008]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
+          ampSynth : [1,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
           attack : [1,1,1,1,1,1,1],
           decay : [600,600,600,600,600,600,600],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2096,7 +2114,7 @@ gamelan = {
           detuneSynth : [1,[1.005,1.003,1.004,1.004,1.006,1.005,1.007]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
+          ampSynth : [1,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
           attack : [1,1,1,1,1,1,1],
           decay : [1300,1300,1300,1300,1300,1300,1300],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2116,7 +2134,7 @@ gamelan = {
           detuneSynth : [1,[1.003,1.005,1.008,1.003,1.005,1.002,1.006]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [0.09,0.09,0.09,0.09,0.09,0.09,0.09],
+          ampSynth : [1,[0.09,0.09,0.09,0.09,0.09,0.09,0.09]],
           attack : [1,1,1,1,1,1,1],
           decay : [1500,1500,1500,1500,1500,1500,1500],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2136,7 +2154,7 @@ gamelan = {
           detuneSynth : [1,[1.006,1.004,1.007,1.003,1.005,1.004,1.005]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [0.1,0.1,0.1,0.1,0.1,0.1,0.1],
+          ampSynth : [1,[0.1,0.1,0.1,0.1,0.1,0.1,0.1]],
           attack : [1,1,1,1,1,1,1],
           decay : [2500,2500,2500,2500,2500,2500,2500],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2156,7 +2174,7 @@ gamelan = {
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006,1.004]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
+          ampSynth : [1,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
           attack : [1,1,1,1,1,1,1],
           decay : [5000,5000,5000,5000,5000,5000,5000],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2176,7 +2194,7 @@ gamelan = {
           detuneSynth : [1,[1.01]],
           detuneSamp : [1,[1]],
           ampSamp : [1,[1]],
-          ampSynth : [0.1],
+          ampSynth : [1,[0.1]],
           attack : [1],
           decay : [800],
           waveShape : ["sine"],
@@ -2196,7 +2214,7 @@ gamelan = {
           detuneSynth : [1,[1.05]],
           detuneSamp : [1,[1]],
           ampSamp : [1,[1]],
-          ampSynth : [0.15],
+          ampSynth : [1,[0.15]],
           attack : [100],
           decay : [300],
           waveShape : ["pulse"],
@@ -2216,7 +2234,7 @@ gamelan = {
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004]],
           detuneSamp : [1,[1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1]],
-          ampSynth : [0.15,0.15,0.15,0.15,0.15],
+          ampSynth : [1,[0.15,0.15,0.15,0.15,0.15]],
           attack : [80,80,80,80,80],
           decay : [4000,4000,4000,4000,4000],
           waveShape : ["sine","sine","sine","sine","sine"],
@@ -2236,7 +2254,7 @@ gamelan = {
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004]],
           detuneSamp : [1,[1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1]],
-          ampSynth : [0.15,0.15,0.15,0.15,0.15],
+          ampSynth : [1,[0.15,0.15,0.15,0.15,0.15]],
           attack : [2,2,2,2,2],
           decay : [3000,3000,3000,3000,3000],
           waveShape : ["sine","sine","sine","sine","sine"],
@@ -2256,7 +2274,7 @@ gamelan = {
           detuneSynth : [1,[0.99,0.99]],
           detuneSamp : [1,[1,1]],
           ampSamp : [1,[1,1]],
-          ampSynth : [0.1,0.1],
+          ampSynth : [1,[0.1,0.1]],
           attack : [80,80],
           decay : [5000,5000],
           waveShape : ["pulse","pulse"],
@@ -2281,7 +2299,7 @@ gamelan = {
           detuneSynth : [1,[1.005,1.004,1.005,1.008,1.006,1.005,1.006,1.007,1.005,1.007,1.008,1.007,1.006,1.007]],
           detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
-          ampSynth : [0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04],
+          ampSynth : [1,[0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04]],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [300,300,300,300,300,300,300,300,300,300,300,300,300,300],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
@@ -2301,7 +2319,7 @@ gamelan = {
           detuneSynth : [1,[1.004,1.006,1.005,1.007,1.005,1.003,1.004,1.004,1.006,1.005,1.007,1.005,1.003,1.004]],
           detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
-          ampSynth : [0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12],
+          ampSynth : [1,[0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12]],
           attack : [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
           decay : [800,800,800,800,800,800,800,800,800,800,800,800,800,800],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
@@ -2321,7 +2339,7 @@ gamelan = {
           detuneSynth : [1,[1.007,1.008,1.009,1.005,1.007,1.006,1.008]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
+          ampSynth : [1,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
           attack : [1,1,1,1,1,1,1],
           decay : [600,600,600,600,600,600,600],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2341,7 +2359,7 @@ gamelan = {
           detuneSynth : [1,[1.005,1.003,1.004,1.004,1.006,1.005,1.007]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [0.08,0.08,0.08,0.08,0.08,0.08,0.08],
+          ampSynth : [1,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
           attack : [1,1,1,1,1,1,1],
           decay : [1300,1300,1300,1300,1300,1300,1300],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2361,7 +2379,7 @@ gamelan = {
           detuneSynth : [1,[1.003,1.005,1.008,1.003,1.005,1.002,1.006]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [0.09,0.09,0.09,0.09,0.09,0.09,0.09],
+          ampSynth : [1,[0.09,0.09,0.09,0.09,0.09,0.09,0.09]],
           attack : [1,1,1,1,1,1,1],
           decay : [1500,1500,1500,1500,1500,1500,1500],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2381,7 +2399,7 @@ gamelan = {
           detuneSynth : [1,[1.006,1.004,1.007,1.003,1.005,1.004,1.005]],
           detuneSamp : [1,[1,1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1,1]],
-          ampSynth : [0.1,0.1,0.1,0.1,0.1,0.1,0.1],
+          ampSynth : [1,[0.1,0.1,0.1,0.1,0.1,0.1,0.1]],
           attack : [1,1,1,1,1,1,1],
           decay : [2500,2500,2500,2500,2500,2500,2500],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2401,7 +2419,7 @@ gamelan = {
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006,1.004]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
+          ampSynth : [1,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
           attack : [1,1,1,1,1,1,1],
           decay : [5000,5000,5000,5000,5000,5000,5000],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2421,7 +2439,7 @@ gamelan = {
           detuneSynth : [1,[1.01]],
           detuneSamp : [1,[1]],
           ampSamp : [1,[1]],
-          ampSynth : [0.15],
+          ampSynth : [1,[0.15]],
           attack : [1],
           decay : [800],
           waveShape : ["sine"],
@@ -2441,7 +2459,7 @@ gamelan = {
           detuneSynth : [1,[1.01]],
           detuneSamp : [1,[1]],
           ampSamp : [1,[1]],
-          ampSynth : [0.1],
+          ampSynth : [1,[0.1]],
           attack : [100],
           decay : [300],
           waveShape : ["pulse"],
@@ -2461,7 +2479,7 @@ gamelan = {
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006]],
           detuneSamp : [1,[1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1]],
-          ampSynth : [0.15,0.15,0.15,0.15,0.15,0.15],
+          ampSynth : [1,[0.15,0.15,0.15,0.15,0.15,0.15]],
           attack : [80,80,80,80,80,80],
           decay : [4000,4000,4000,4000,4000,4000],
           waveShape : ["sine","sine","sine","sine","sine","sine"],
@@ -2481,7 +2499,7 @@ gamelan = {
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006,1.004]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [0.15,0.15,0.15,0.15,0.15,0.15,0.15],
+          ampSynth : [1,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
           attack : [2,2,2,2,2,2,2],
           decay : [3000,3000,3000,3000,3000,3000,3000],
           waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
@@ -2501,7 +2519,7 @@ gamelan = {
           detuneSynth : [1,[0.99,0.99]],
           detuneSamp : [1,[1,1]],
           ampSamp : [1,[1,1]],
-          ampSynth : [0.1,0.1],
+          ampSynth : [1,[0.1,0.1]],
           attack : [80,80],
           decay : [5000,5000],
           waveShape : ["sine","sine"],
@@ -2525,7 +2543,7 @@ gamelan = {
           detuneSynth : [1,[0.95,0.95,0.95]],
           detuneSamp : [1,[1,1,1]],
           ampSamp : [1,[1,1,1]],
-          ampSynth : [0.35,0.35,0.35],
+          ampSynth : [1,[0.35,0.35,0.35]],
           attack : [100,100,100],
           decay : [7000,7000,7000],
           waveShape : ["triangle"],
@@ -2536,7 +2554,7 @@ gamelan = {
           effectBus : ["gongs",0.5]
         },
         kdhKalih : {
-          use : true,
+          use : false,
           samplesOnly : true,
           type : "drums",
           notes : ["b","p","t","k","o","a","r"],
@@ -2546,7 +2564,7 @@ gamelan = {
           detuneSynth : [1,[1,1,1,1,1,1,1]], // why fantasy?
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [0.2,0.2,0.2,0.2,0.1,0.2,0.2],
+          ampSynth : [1,[0.2,0.2,0.2,0.2,0.1,0.2,0.2]],
           attack : [20,5,1,1,2,1,1],
           decay : [2000,1000,100,50,1000,20,50],
           waveShape : ["sine","sine","square","sawtooth","pulse","sawtooth","pulse"],
@@ -2688,7 +2706,7 @@ nyaga = {
       sex : "male"
   },
   darti : {
-      ricikan : "kendhang",
+      ricikan : "kdhKalih",
       amp : 1,
       ampVar: 1,
       timingVar : 1,
@@ -2795,6 +2813,7 @@ nyaga = {
 startingTheEngines = function() {
   scales = []; iNames = []; pNames = [];
   var ensemble = now.instruments;
+  pulseUnit = now.pulseUnit;
   var ix = 0;
   for (var iName in ensemble) {
     var instr = ensemble[iName];
@@ -2816,8 +2835,8 @@ startingTheEngines = function() {
   instrCnt = ix;
   parts = []; synths = [];
   for (var i=0;i<instrCnt;i++) {
-  // create Synth-Dummies
-    synths.push(Synth()); // synths.push(Synth({ active : false }).out())
+  // create Synth-Dummies - current values are provisional untill passing in by Seq works
+    synths.push(Synth({})); // synths.push(Synth({ active : false }).out())
   //  if (instr.effectBus) { synths[ix].send(instr.effectBus[0],instr.effectBus[1]); }
   }
   // push part-definitions to array "parts" ####################################
@@ -2842,7 +2861,7 @@ startingTheEngines = function() {
       case "kenong" : kn = parts[i]; skn = synths[i]; break;
       case "gongSuw" : gs = parts[i]; sga = synths[i]; break;
       case "gong" : ga = parts[i]; sga = synths[i]; break;
-      case "kendhang" : kd = parts[i]; skd = synths[i];
+      case "kdhKalih" : kd = parts[i]; skd = synths[i];
     };
     if (iName===flags.bukaInstr) { bi = parts[i]; sbi = synths[i]; };
     if (iName===conf.timeKeeper) { tk = parts[i]; stk = synths[i]; };
@@ -2972,7 +2991,7 @@ takeOff = function() {
                   if (gPulse % halph === 0) {
                     // Here go things on halph-gong-level
                     if (gPulse % fullPeriod === 0) {
-                      onGong();
+//                      onGong();
                     }
                   }
                 }
@@ -2985,6 +3004,7 @@ takeOff = function() {
       durations : [_32]
     })
   )
+/*
   gongan = parts[parts.length-1]
   if (toggle.watchDogs) {
     var decideUponNgelikBranch = ppGongan-ppGatra;
@@ -3062,6 +3082,8 @@ takeOff = function() {
     )
     watchDogs = wd = parts[parts.length-1];
   }
+*/
+/*
   if (toggle.autoPilot) {
     var startSlowDownDuringBuka = ppBuka-(2*ppGatra);
     var stopSlowDownAfterBuka = ppTiba;
@@ -3086,5 +3108,6 @@ takeOff = function() {
     )
     autoPilot = ap = parts[parts.length-1];
   }
+*/
   return "... welcome to gendhing. You are almost there. Type gendhing.play() or make your choices first. (not much for now, though ;))";
 };

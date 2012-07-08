@@ -470,15 +470,14 @@ default:
 
 "gamelan":
 '// Settings/selection ##########################################################\n'+
-'flags = {\n'+
-'  gendhing : "wilujeng",\n'+
-'  pathet : "p7",\n'+
-'  form : "ladrang",\n'+
-'  garap : "gerongan-salisir",\n'+
-'  bukaInstr : "bonangBar",\n'+
-'  gamelanName : "generic",\n'+
-'  segment : "buka", // select segment to start with\n'+
-'  irama : (this.form === "lancaran") ? "ir0": "irI", // select irama to start with - adjust speed (G.setBPM(60)) if you want to start in irII\n'+
+'flags.gending = "wilujeng";\n'+
+'flags.pathet = "p7";\n'+
+'flags.form = "ladrang";\n'+
+'flags.garap = "gerongan-salisir";\n'+
+'flags.bukaInstr = "bonangBar";\n'+
+'flags.gamelanName = "generic";\n'+
+'flags.segment = "buka"; // select segment to start with\n'+
+'flags.irama = "irI"; // select irama to start with - adjust speed (G.setBPM(60)) if you want to start in irII\n'+
 '};\n'+
 '// At some point the two functions below should load the GibberGamelan with\n'+
 '// the selections made above. This doesn\'t work yet and doesn\'t make much\n'+
