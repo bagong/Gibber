@@ -478,10 +478,15 @@ default:
 'flags.gamelanName = "generic";\n'+
 'flags.segment = "buka"; // select segment to start with\n'+
 'flags.irama = "irI"; // select irama to start with - adjust speed (G.setBPM(60)) if you want to start in irII\n'+
-'};\n'+
-'// At some point the two functions below should load the GibberGamelan with\n'+
-'// the selections made above. This doesn\'t work yet and doesn\'t make much\n'+
-'// sense eihter, because there are no pieces yet among withich to select ;)\n'+
+'flags.autoPilot = true;\n'+
+'flags.watchDogs = true;\n'+
+'flags.logGongan = true;\n'+
+'flags.logBranching = true;\n'+
+'flags.logAutoPilot = true;\n'+
+'flags.logWatchDogs = true;\n'+
+'\n'+
+'conf.synthesis = "additive"; // try "FM", "triangle" (additive is just 1 sineOsc for now)\n'+
+'conf.drumsSamples = false; // doesn\'t work yet\n'+
 '\n'+
 'startingTheEngines();\n'+
 'takeOff();\n'+

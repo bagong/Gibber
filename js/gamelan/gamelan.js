@@ -12,12 +12,12 @@ conf = { // these settings can change (that are the plans ;)), but they are more
   irLevels : 2, // pow of 2 for pulses. Speed-levels for now just irI and II irLevels & sdLevels overlap by one.
   sdLevels : 2, // pow of 2. Subdivision-levels relative to irama. ppb is Math.pow(2,(conf.irLevels+conf.sdLevels-1)) - notation-parsers don't support sdLevels:3 yet
   timeKeeper : "peking",
-  synthPref : "light", // currently standard or light - standard will use FM-synthesis if available, but it is too heavy for most computers in 2012
   soMode : true, // if false, balungan-notation will be used with minimal processing (just cleaning) (mind beginning of ngelik!)
   pulseMode : true, // pulseMode creates durations from a mini-Pulse while propMode or dursMode uses individual durations for each note (the later doesn't work well yet, problems with offset, but is probably more consistent on the long run)
   audioHost : "http://localhost",
   audioPath : "gamelan/audiofiles",
-  useSamples : false
+  synthesis : "additive", // additive,fm,samples (additive currently is just 1 oscillator)
+  drumsSamples : false
 };
 par = {
   tooFast : 2500,
@@ -34,26 +34,12 @@ par = {
   lagMaxMul : 1,
   lagMinAdd : 0,
   lagMaxAdd : 0,
-  transpose : 1,
+  detune : 1,
   stretch : 1,
   get ppb() { return Math.pow(2,(conf.irLevels+conf.sdLevels-1)) },
   get lagGongSuwuk() { return _4 }, // will eventually become something more fancy
   get lagPastGongSuwuk() { return rndi(1000,4500) },
   get lagGongBuka() { return _64+rndi(1000,3000) }
-};
-
-toggle = { // onOff
-  lag : false,
-  lagBuka : false,
-  lagGongBuka : false,
-  lagGongSuwuk : false,
-  watchDogs : false, // watchdogs do things like trigger irama-switch or set a ngelik-flag and try to keep the piece stable
-  autoPilot : false,
-  logGongan : false,
-  logAutoPilot : false,
-  logBranching : false,
-  logWatchDogs : false,
-  logUserInput : false,
 };
 now = { // contextual/temporal information - depend on above values and performance state
   get ppb() { return Math.pow(2,(conf.irLevels+conf.sdLevels-1)) },
@@ -92,8 +78,8 @@ now = { // contextual/temporal information - depend on above values and performa
     kenong : function(n) { return n*now.pp.kenongan }
   },
   pm : {
-    get sabet() { return ((G.sampleRate*60)/(now.pulseUnit*now.ppb)).toFixed(2) },
-    get keteg() { return ((G.sampleRate*120*kar.irFactor(flags.irama))/(now.pulseUnit*now.ppb)).toFixed(2) }
+    get sabet() { return ((G.sampleRate*60)/(pulseUnit*now.ppb)).toFixed(2) },
+    get keteg() { return ((G.sampleRate*120*kar.irFactor(flags.irama))/(pulseUnit*now.ppb)).toFixed(2) }
   }
 };
 // flags for state monitoring (no user-interference expected)
@@ -115,12 +101,20 @@ flags = {
   habisNgampat : false,
   fastForward : false,
   doSuwuk : false,
-  isGonganSuwuk : false
+  isGonganSuwuk : false,
+  lag : false,
+  lagBuka : false,
+  lagGongBuka : false,
+  lagGongSuwuk : false,
+  watchDogs : true, // watchdogs do things like trigger irama-switch or set a ngelik-flag and try to keep the piece stable
+  autoPilot : true,
+  logGongan : true,
+  logAutoPilot : true,
+  logBranching : true,
+  logWatchDogs : true,
+  logUserInput : false,
+  logSequencer : false
 };
-// pulseUnit = if (now.ppb === 8) { _32 };// : (now.ppb === 16) ? _64 : (now.ppb === 32) ? _64 : (now.ppb === 64) ? _64 : undefined;
-// if (now.ppb === 8) { alert("It is!"+Gibber.sampleRate+Gibber.bpm); pulseUnit = _32; };// : (now.ppb === 16) ? _64 : (now.ppb === 32) ? _64 : (now.ppb === 64) ? _64 : undefined;
-// alert(now.pulseUnit);
-// var pulseUnit = now.pulseUnit;
 // MESSAGES ####################################################################
 msg = {
   console : {
@@ -260,7 +254,7 @@ instrFrequencies = function (iName) {
   }
   var tuning = now.tuning;
   var detune = instr.detuneSynth;
-  var globalTrans = par.transpose;
+  var globalDetune = par.detune;
   var globalStretch = par.stretch;
   var octaveReg = instr.octave;
   var instrStretch = instr.stretch;
@@ -273,7 +267,7 @@ instrFrequencies = function (iName) {
   for (var i = 0; i < cnt; i++ ) {
     var note = iScale[i];
     var wrap = (note>7) ? note-7 : (note<1) ? note+7 : note; // this allows for 3 octaves (only)
-    scale.push( tuning[nScale.indexOf(wrap)] * globalTrans * instrDetune * tonesDetune[i] * ((Math.pow(2,octaveReg[i]-1))/16) * instrStretch * globalStretch); 
+    scale.push( tuning[nScale.indexOf(wrap)] * globalDetune * instrDetune * tonesDetune[i] * ((Math.pow(2,octaveReg[i]-1))/8) * instrStretch * globalStretch); 
   } 
   return scale;
 };
@@ -305,7 +299,7 @@ partGen = function(i,segment,irama,counter,play) {
 partsSet = function(segment,irama,counter,play) {
   segment = segment || flags.segment;
   irama = irama || flags.irama;
-  counter = 0; //(counter===0) ? 0 : counter || gPulse%now.pp.gongan;
+  counter = (counter===0) ? 0 : counter || gPulse%now.pp.gongan;
   play = play || true;
   for (var i=0;i<instrCnt;i++) {
     partSet(i,segment,irama,counter,play);
@@ -318,14 +312,14 @@ partSet = function(i,segment,irama,counter,play) {
   counter = (counter===0) ? 0 : counter || gPulse%now.pp.gongan;
   play = play || true;
   var seqs = part("regen",i,segment,irama,counter,play); // careful! Counter is not well thought out yet. What happens if a part is not regenerated at gong (gPulse != 0))
-  parts[i].counter = 1; //counter;
+  parts[i].counter = counter;
   parts[i].active = play;
   parts[i].note = seqs.frequencies;
   parts[i].durations = seqs.durations;
   parts[i].amp = seqs.amp;
   parts[i].attack = seqs.attack;
   parts[i].decay = seqs.decay;
-  parts[i].waveShape = seqs.waveShape;
+  parts[i].waveform = seqs.waveform;
   parts[i].offset = seqs.offset;
   parts[i].slaves = seqs.slaves;
   return "Part regenerated";
@@ -343,11 +337,11 @@ part = function(target,iIx,segment,irama,counter,play) {
   var scale = scales[iIx];
   var pName = pNames[iIx];
   var person = nyaga[pName];
-  var waveShape = instr.waveShape;
+  var waveform = instr.waveform;
   var part = garap[iName](segment,irama);
   var degrees = part.sequence;
   var durations = part.durations;
-  var ampInstr = (!conf.useSamples && !instr.samplesOnly) ? instr.ampSynth : instr.ampSamp;
+  var ampInstr = (conf.synthesis !== "samples" && !instr.samplesOnly) ? instr.ampSynth : instr.ampSamp;
   var ampPart = part.amp;
   var ampPerson = person.amp;
   var attackInstr = instr.attack;
@@ -365,47 +359,44 @@ part = function(target,iIx,segment,irama,counter,play) {
   var cntAmps = ampPart.length;
   var cntAttack = attackPart.length;
   var cntDecay = decayPart.length;
-  var cntWaveShape = waveShape.length;
+  var cntWaveform = waveform.length;
   var freqs = [];
   var durs = [];
   var amps = [];
   var attacks = [];
   var decays = [];
-  var waveShapes = [];
+  var waveforms = [];
   var lag = offsetPart * offsetPerson; // lag and offset should not be mixed - offset is technical, lag musical
  
   for (var i=0;i<cntDegrees;i++) {
     normIx = notes.indexOf(degrees[i]);
-    switch (iName) {
-      case "kdhKalih" : freqs.push(degrees[i]); break;
-      default : (degrees[i] || degrees[i] === 0) ? freqs.push(scale[normIx]) : freqs.push(undefined);
-    }
+    (degrees[i] || degrees[i] === 0) ? freqs.push(scale[normIx]) : freqs.push(undefined);
     (conf.pulseMode) ? durs = [pulseUnit] : (cntDurs === 1) ? durs.push(durations[0]) : durs.push(durations[i]);
     (cntAmps === 1) ? amps.push((ampPart[0]*ampInstr[0]*ampInstr[1][normIx]*ampPerson) || undefined) : amps.push((ampPart[i]*ampInstr[0]*ampInstr[1][normIx]*ampPerson) ||  undefined);
     if (cntAttack === 1) {
-      var aNow = (attackPart[0]*attackInstr[normIx]*attackPerson);
+      var aNow = attackPart[0]*attackInstr[0]*attackInstr[1][normIx]*attackPerson;
       var aNowExt = (aNow) ? ms(aNow) : undefined;
       attacks.push(aNowExt);
     } else {
-      var aNow = attackPart[i]*attackInstr[normIx]*attackPerson;
+      var aNow = attackPart[i]*attackInstr[0]*attackInstr[1][normIx]*attackPerson;
       var aNowExt = (aNow) ? ms(aNow) : undefined;
       attacks.push(aNow);
     }
     if (cntDecay === 1) {
-      var dNow = decayPart[0]*decayInstr[normIx]*decayPerson;
+      var dNow = decayPart[0]*decayInstr[0]*decayInstr[1][normIx]*decayPerson;
       var dNowExt = (dNow) ? ms(dNow) : undefined;
       decays.push(dNowExt)
     } else {
-      var dNow = decayPart[i]*decayInstr[normIx]*decayPerson;
+      var dNow = decayPart[i]*decayInstr[0]*decayInstr[1][normIx]*decayPerson;
       var dNowExt = (dNow) ? ms(dNow) : undefined;
       decays.push(dNowExt)
     };
-    (cntWaveShape === 1) ? waveShapes.push(waveShape[0]) : waveShapes.push(waveShape[normIx]);
+    (cntWaveform === 1) ? waveforms.push(waveform[0]) : waveforms.push(waveform[normIx]);
   }
   if (target === "generate") {
-    return { active : play, note : freqs, durations : durs, amp : amps, attack : attacks, decay : decays, waveShape : waveShapes, counter : counter, offset : lag, slaves : synth };
+    return { active : play, note : freqs, durations : durs, amp : amps, attack : attacks, decay : decays, waveform : waveforms, counter : counter, offset : lag, slaves : synth };
   } else {
-    return { frequencies : freqs, durations : durs, amp : amps, attack : attacks, decay : decays, waveShape : waveShapes, counter : counter, offset : lag, slaves : synth };
+    return { frequencies : freqs, durations : durs, amp : amps, attack : attacks, decay : decays, waveform : waveforms, counter : counter, offset : lag, slaves : synth };
   }
 };
 // UTILS #######################################################################
@@ -664,7 +655,7 @@ tests = {
       console.log("amp:         "+parts[i].amp.length);
       console.log("attack:      "+parts[i].attack.length);
       console.log("decay:       "+parts[i].decay.length);
-      console.log("waveShape:   "+parts[i].waveShape.length);
+      console.log("waveform:   "+parts[i].waveform.length);
       console.log((parts[i].offset===0) ? "offset:      1" : "offset:      "+parts[i].offset.length);
       console.log("slaves:      "+parts[i].slaves.length);
     }
@@ -1290,53 +1281,53 @@ kar.branching = function() {
       flags.segment = "umpak";
       flags.firstGongan = true;
       flags.goToNgelik = false;
-      if (toggle.logBranching) { console.log(msg.console.afterBuka); }
+      if (flags.logBranching) { console.log(msg.console.afterBuka); }
       return partsSet(flags.segment,flags.irama,0,true);
       break;
-    case toggle.autoPilot === false && flags.goToNgelik === true :
+    case flags.autoPilot === false && flags.goToNgelik === true :
       flags.segment = "ngelik";
       flags.goToNgelik = false;
-      if (toggle.logBranching) { (flags.irama === "irI") ? console.log(msg.console.findGoToNgelik.irI) : console.log(msg.console.findGoToNgelik.irII); }
+      if (flags.logBranching) { (flags.irama === "irI") ? console.log(msg.console.findGoToNgelik.irI) : console.log(msg.console.findGoToNgelik.irII); }
       return partsSet();
       break;
-    case toggle.autoPilot === false && flags.goToNgelik === false :
+    case flags.autoPilot === false && flags.goToNgelik === false :
       flags.segment = "umpak";
-      if (toggle.logBranching) { (flags.irama === "irI") ? console.log(msg.console.notFindGoToNgelik.irI) : console.log(msg.console.notFindGoToNgelik.irII); }
+      if (flags.logBranching) { (flags.irama === "irI") ? console.log(msg.console.notFindGoToNgelik.irI) : console.log(msg.console.notFindGoToNgelik.irII); }
       return partsSet();
       break;
     case flags.segment === "umpak" && flags.firstGongan === true :
       flags.segment = "umpak";
       flags.firstGongan = false;
       flags.goToNgelik = true;
-      if (toggle.logBranching) { (flags.irama === "irI") ? console.log(msg.console.afterFirstGongan.irI) : console.log(msg.console.afterFirstGongan.irII); }
+      if (flags.logBranching) { (flags.irama === "irI") ? console.log(msg.console.afterFirstGongan.irI) : console.log(msg.console.afterFirstGongan.irII); }
       return partsSet();
       break;
     case flags.segment === "umpak":
       flags.segment = "ngelik";
       flags.goToNgelik = false;
-      if (toggle.logBranching) { (flags.irama === "irI") ? console.log(msg.console.onEnteringNgelik.irI) : console.log(msg.console.onEnteringNgelik.irII); }
+      if (flags.logBranching) { (flags.irama === "irI") ? console.log(msg.console.onEnteringNgelik.irI) : console.log(msg.console.onEnteringNgelik.irII); }
       return partsSet();
       break;
     case flags.segment === "ngelik":
       flags.segment = "umpak";
       flags.goToNgelik = true;
-      if (toggle.logBranching) { (flags.irama === "irI") ? console.log(msg.console.onEnteringUmpak.irI) : console.log(msg.console.onEnteringUmpak.irII); }
+      if (flags.logBranching) { (flags.irama === "irI") ? console.log(msg.console.onEnteringUmpak.irI) : console.log(msg.console.onEnteringUmpak.irII); }
       return partsSet();
       break;
     default :
       flags.segment = "umpak";
-      if (toggle.logBranching) { console.log(msg.console.defaultBranch); }
+      if (flags.logBranching) { console.log(msg.console.defaultBranch); }
       return partsSet();
   }
 }
 kar.lag = function(low,high,irama,delay) { // for now Lag is (only set at the gong )
-  if (toggle.lag && (flags.segment !== "buka" || toggle.lagBuka)) {
+  if (flags.lag && (flags.segment !== "buka" || flags.lagBuka)) {
     low = low*par.lagMinMul+par.lagMinAdd;
     high = high*par.lagMaxMul+par.lagMaxAdd;
     var delayAdd = (flags.isGonganSuwuk) ? par.lagPastGongSuwuk : 0;
     var delayAddOverride = delay || delayAdd; // this is to make sure that only other instruments and not the gong itself delay
-    var lagBuka = (flags.firstGongan && toggle.lagGongBuka) ? par.lagGongBuka : 0;
-    var lagSuwuk = (flags.isGonganSuwuk && toggle.lagGongSuwuk) ? par.lagGongSuwuk+delayAddOverride : 0;
+    var lagBuka = (flags.firstGongan && flags.lagGongBuka) ? par.lagGongBuka : 0;
+    var lagSuwuk = (flags.isGonganSuwuk && flags.lagGongSuwuk) ? par.lagGongSuwuk+delayAddOverride : 0;
     return rndi(low,high)*kar.irFactor(irama) + lagBuka + lagSuwuk; // think about irama-Faktor - could also be a time-variable
   } else {
     return 0;
@@ -1389,13 +1380,13 @@ kar.jadi = speedSteady = ss = function() { // think about speedDiffMul-reset
 };
 kar.goToNgelik = goToNgelik = ng = function() {
   flags.goToNgelik = true;
-  if(toggle.logUserInput) { console.log(msg.console.onSetNgelikFlag) }
+  if(flags.logUserInput) { console.log(msg.console.onSetNgelikFlag) }
   return "Set ngelik-flag";
 }
 kar.enterSuwukMode = end = doSuwuk = function(factor) {
   par.suwukDiffMul = factor || par.suwukDiffMul;
   flags.doSuwuk = true;
-  if(toggle.logUserInput) { console.log(msg.console.onSetSuwukFlag) }
+  if(flags.logUserInput) { console.log(msg.console.onSetSuwukFlag) }
   return "Triggered suwuk-mode (kar.enterSuwukMode)";
 };
 kar.nyuwuk = phaseOut = function(factor) {
@@ -2050,16 +2041,15 @@ gamelan = {
           notes : [-6,-5,-4,-2,-1,1,2,3,5,6,8,9],
           octave : [5,5,5,5,5,6,6,6,6,6,7,7],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.005,1.004,1.005,1.008,1.006,1.005,1.006,1.007,1.005,1.007,1.008,1.007]],
           detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSynth : [1,[0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04]],
-          attack : [1,1,1,1,1,1,1,1,1,1,1,1],
-          decay : [300,300,300,300,300,300,300,300,300,300,300,300],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1,1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
+          decay : [1,[300,300,300,300,300,300,300,300,300,300,300,300]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         bonangBar : {
@@ -2070,16 +2060,15 @@ gamelan = {
           notes : [-6,-5,-4,-2,-1,1,2,3,5,6,8,9],
           octave : [4,4,4,4,4,5,5,5,5,5,6,6],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.004,1.006,1.005,1.007,1.005,1.003,1.004,1.004,1.006,1.005,1.007,1.005]],
           detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSynth : [1,[0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12]],
-          attack : [1,1,1,1,1,1,1,1,1,1,1,1],
-          decay : [800,800,800,800,800,800,800,800,800,800,800,800],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1,1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
+          decay : [1,[800,800,800,800,800,800,800,800,800,800,800,800]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1,1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         peking : {
@@ -2090,16 +2079,15 @@ gamelan = {
           notes : [-1,1,2,3,5,6,8],
           octave : [5,6,6,6,6,6,7],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.007,1.008,1.009,1.005,1.007,1.006,1.008]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
           ampSynth : [1,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
-          attack : [1,1,1,1,1,1,1],
-          decay : [600,600,600,600,600,600,600],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [2,2,2,2,2,2,2],
-          index : [1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1]],
+          decay : [1,[600,600,600,600,600,600,600]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[2,2,2,2,2,2,2]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         saronA : {
@@ -2110,16 +2098,15 @@ gamelan = {
           notes : [-1,1,2,3,5,6,8],
           octave : [4,5,5,5,5,5,6],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.005,1.003,1.004,1.004,1.006,1.005,1.007]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
           ampSynth : [1,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
-          attack : [1,1,1,1,1,1,1],
-          decay : [1300,1300,1300,1300,1300,1300,1300],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1]],
+          decay : [1,[1300,1300,1300,1300,1300,1300,1300]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         saronB : {
@@ -2130,16 +2117,15 @@ gamelan = {
           notes : [-1,1,2,3,5,6,8],
           octave : [4,5,5,5,5,5,6],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.003,1.005,1.008,1.003,1.005,1.002,1.006]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
           ampSynth : [1,[0.09,0.09,0.09,0.09,0.09,0.09,0.09]],
-          attack : [1,1,1,1,1,1,1],
-          decay : [1500,1500,1500,1500,1500,1500,1500],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1]],
+          decay : [1,[1500,1500,1500,1500,1500,1500,1500]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         demung : {
@@ -2150,16 +2136,15 @@ gamelan = {
           notes : [-1,1,2,3,5,6,8],
           octave : [3,4,4,4,4,4,5],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.006,1.004,1.007,1.003,1.005,1.004,1.005]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
           ampSynth : [1,[0.1,0.1,0.1,0.1,0.1,0.1,0.1]],
-          attack : [1,1,1,1,1,1,1],
-          decay : [2500,2500,2500,2500,2500,2500,2500],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1]],
+          decay : [1,[2500,2500,2500,2500,2500,2500,2500]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         slenthem : {
@@ -2170,16 +2155,15 @@ gamelan = {
           notes : [-1,1,2,3,5,6,8],
           octave : [2,3,3,3,3,3,4],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006,1.004]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
           ampSynth : [1,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
-          attack : [1,1,1,1,1,1,1],
-          decay : [5000,5000,5000,5000,5000,5000,5000],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [1,1,1,1,1,1,1],
-          index : [1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1]],
+          decay : [1,[5000,5000,5000,5000,5000,5000,5000]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[1,1,1,1,1,1,1]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         kempyang : {
@@ -2190,16 +2174,15 @@ gamelan = {
           notes : [8],
           octave : [6],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.01]],
           detuneSamp : [1,[1]],
           ampSamp : [1,[1]],
           ampSynth : [1,[0.1]],
-          attack : [1],
-          decay : [800],
-          waveShape : ["sine"],
-          cmRatio : [1.4],
-          index : [0.95],
+          attack : [1,[1]],
+          decay : [1,[800]],
+          waveform : ["Sine"],
+          cmRatio : [1,[1.4]],
+          index : [1,[0.95]],
           effectBus : ["gongs",0.5]
         },
         kethuk : {
@@ -2210,16 +2193,16 @@ gamelan = {
           notes : [2],
           octave : [4],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.05]],
           detuneSamp : [1,[1]],
           ampSamp : [1,[1]],
           ampSynth : [1,[0.15]],
-          attack : [100],
-          decay : [300],
-          waveShape : ["pulse"],
-          cmRatio : [1 + Math.sqrt(2)],
-          index : [2],
+          attack : [1,[100]],
+          decay : [1,[300]],
+          waveform : ["Triangle"],
+//          waveform : ["Pulse"], // doesn't work for now
+          cmRatio : [1,[1+Math.sqrt(2)]],
+          index : [1,[2]],
           effectBus : ["gongs",0.5]
         },
         kempul : {
@@ -2230,16 +2213,15 @@ gamelan = {
           notes : [3,5,6,8,9],
           octave : [2,2,2,3,3], // [sic!] this reorders the gongs
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004]],
           detuneSamp : [1,[1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1]],
           ampSynth : [1,[0.15,0.15,0.15,0.15,0.15]],
-          attack : [80,80,80,80,80],
-          decay : [4000,4000,4000,4000,4000],
-          waveShape : ["sine","sine","sine","sine","sine"],
-          cmRatio : [1 + Math.sqrt(2),1 + Math.sqrt(2),1 + Math.sqrt(2),1 + Math.sqrt(2),1 + Math.sqrt(2)],
-          index : [2,2,2,2,2],
+          attack : [1,[80,80,80,80,80]],
+          decay : [1,[4000,4000,4000,4000,4000]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[1+Math.sqrt(2),1+Math.sqrt(2),1+Math.sqrt(2),1+Math.sqrt(2),1+Math.sqrt(2)]],
+          index : [1,[2,2,2,2,2]],
           effectBus : ["gongs",0.5]
         },
         kenong : {
@@ -2250,16 +2232,15 @@ gamelan = {
           notes : [2,3,5,6,8],
           octave : [4,4,4,4,5],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004]],
           detuneSamp : [1,[1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1]],
           ampSynth : [1,[0.15,0.15,0.15,0.15,0.15]],
-          attack : [2,2,2,2,2],
-          decay : [3000,3000,3000,3000,3000],
-          waveShape : ["sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1],
+          attack : [1,[2,2,2,2,2]],
+          decay : [1,[3000,3000,3000,3000,3000]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1]],
           effectBus : ["gongs",0.5]
         },
         gongSuw : {
@@ -2270,16 +2251,15 @@ gamelan = {
           notes : [1,2],
           octave : [2,2],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[0.99,0.99]],
           detuneSamp : [1,[1,1]],
           ampSamp : [1,[1,1]],
           ampSynth : [1,[0.1,0.1]],
-          attack : [80,80],
-          decay : [5000,5000],
-          waveShape : ["pulse","pulse"],
-          cmRatio : [2.01,2.01],
-          index : [1,1],
+          attack : [1,[80,80]],
+          decay : [1,[5000,5000]],
+          waveform : ["Triangle","Triangle"],
+          cmRatio : [1,[2.01,2.01]],
+          index : [1,[1,1]],
           effectBus : ["gongs",0.5]
         }
       }
@@ -2295,16 +2275,15 @@ gamelan = {
           notes : [-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7],
           octave : [5,5,5,5,5,5,5,6,6,6,6,6,6,6],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.005,1.004,1.005,1.008,1.006,1.005,1.006,1.007,1.005,1.007,1.008,1.007,1.006,1.007]],
           detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSynth : [1,[0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04]],
-          attack : [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-          decay : [300,300,300,300,300,300,300,300,300,300,300,300,300,300],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
+          decay : [1,[300,300,300,300,300,300,300,300,300,300,300,300,300,300]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         bonangBar : {
@@ -2315,16 +2294,15 @@ gamelan = {
           notes : [-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7],
           octave : [4,4,4,4,4,4,4,5,5,5,5,5,5,5],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.004,1.006,1.005,1.007,1.005,1.003,1.004,1.004,1.006,1.005,1.007,1.005,1.003,1.004]],
           detuneSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
           ampSynth : [1,[0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12]],
-          attack : [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-          decay : [800,800,800,800,800,800,800,800,800,800,800,800,800,800],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
+          decay : [1,[800,800,800,800,800,800,800,800,800,800,800,800,800,800]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1,1,1,1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         peking : {
@@ -2335,16 +2313,15 @@ gamelan = {
           notes : [1,2,3,4,5,6,7],
           octave : [6,6,6,6,6,6,6],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.007,1.008,1.009,1.005,1.007,1.006,1.008]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
           ampSynth : [1,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
-          attack : [1,1,1,1,1,1,1],
-          decay : [600,600,600,600,600,600,600],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [2,2,2,2,2,2,2],
-          index : [1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1]],
+          decay : [1,[600,600,600,600,600,600,600]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[2,2,2,2,2,2,2]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         saronA : {
@@ -2355,16 +2332,15 @@ gamelan = {
           notes : [1,2,3,4,5,6,7],
           octave : [5,5,5,5,5,5,5],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.005,1.003,1.004,1.004,1.006,1.005,1.007]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
           ampSynth : [1,[0.08,0.08,0.08,0.08,0.08,0.08,0.08]],
-          attack : [1,1,1,1,1,1,1],
-          decay : [1300,1300,1300,1300,1300,1300,1300],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1]],
+          decay : [1,[1300,1300,1300,1300,1300,1300,1300]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         saronB : {
@@ -2375,16 +2351,15 @@ gamelan = {
           notes : [1,2,3,4,5,6,7],
           octave : [5,5,5,5,5,5,5],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.003,1.005,1.008,1.003,1.005,1.002,1.006]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
           ampSynth : [1,[0.09,0.09,0.09,0.09,0.09,0.09,0.09]],
-          attack : [1,1,1,1,1,1,1],
-          decay : [1500,1500,1500,1500,1500,1500,1500],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1]],
+          decay : [1,[1500,1500,1500,1500,1500,1500,1500]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         demung : {
@@ -2395,16 +2370,15 @@ gamelan = {
           notes : [1,2,3,4,5,6,7],
           octave : [4,4,4,4,4,4,4],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.006,1.004,1.007,1.003,1.005,1.004,1.005]],
           detuneSamp : [1,[1,1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1,1]],
           ampSynth : [1,[0.1,0.1,0.1,0.1,0.1,0.1,0.1]],
-          attack : [1,1,1,1,1,1,1],
-          decay : [2500,2500,2500,2500,2500,2500,2500],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1]],
+          decay : [1,[2500,2500,2500,2500,2500,2500,2500]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         slenthem : {
@@ -2413,18 +2387,17 @@ gamelan = {
           type : "metallophone",
           resonator : "tub",
           notes : [1,2,3,4,5,6,7],
-          octave : [3,3,3,3,3,,3,3],
+          octave : [3,3,3,3,3,3,3],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006,1.004]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
           ampSynth : [1,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
-          attack : [1,1,1,1,1,1,1],
-          decay : [5000,5000,5000,5000,5000,5000,5000],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [1,1,1,1,1,1,1],
-          index : [1,1,1,1,1,1,1],
+          attack : [1,[1,1,1,1,1,1,1]],
+          decay : [1,[5000,5000,5000,5000,5000,5000,5000]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[1,1,1,1,1,1,1]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["single",0.5]
         },
         kempyang : {
@@ -2435,16 +2408,15 @@ gamelan = {
           notes : [6],
           octave : [5],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.01]],
           detuneSamp : [1,[1]],
           ampSamp : [1,[1]],
           ampSynth : [1,[0.15]],
-          attack : [1],
-          decay : [800],
-          waveShape : ["sine"],
-          cmRatio : [1.4],
-          index : [0.95],
+          attack : [1,[1]],
+          decay : [1,[800]],
+          waveform : ["Sine"],
+          cmRatio : [1,[1.4]],
+          index : [1,[0.95]],
           effectBus : ["gongs",0.5]
         },
         kethuk : {
@@ -2455,16 +2427,16 @@ gamelan = {
           notes : [6],
           octave : [3],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.01]],
           detuneSamp : [1,[1]],
           ampSamp : [1,[1]],
           ampSynth : [1,[0.1]],
-          attack : [100],
-          decay : [300],
-          waveShape : ["pulse"],
-          cmRatio : [1 + Math.sqrt(2)],
-          index : [2],
+          attack : [1,[100]],
+          decay : [1,[300]],
+          waveform : ["Triangle"],
+//          waveform : ["Pulse"],  // doesn't work right now
+          cmRatio : [1,[1+Math.sqrt(2)]],
+          index : [1,[2]],
           effectBus : ["gongs",0.5]
         },
         kempul : {
@@ -2475,16 +2447,15 @@ gamelan = {
           notes : [3,5,6,7,8,9],
           octave : [3,3,3,3,4,4], // [sic!] this reorders the gongs
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006]],
           detuneSamp : [1,[1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1]],
           ampSynth : [1,[0.15,0.15,0.15,0.15,0.15,0.15]],
-          attack : [80,80,80,80,80,80],
-          decay : [4000,4000,4000,4000,4000,4000],
-          waveShape : ["sine","sine","sine","sine","sine","sine"],
-          cmRatio : [1 + Math.sqrt(2),1 + Math.sqrt(2),1 + Math.sqrt(2),1 + Math.sqrt(2),1 + Math.sqrt(2),1 + Math.sqrt(2)],
-          index : [2,2,2,2,2,2],
+          attack : [1,[80,80,80,80,80,80]],
+          decay : [1,[4000,4000,4000,4000,4000,4000]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[1+Math.sqrt(2),1+Math.sqrt(2),1+Math.sqrt(2),1+Math.sqrt(2),1+Math.sqrt(2),1+Math.sqrt(2)]],
+          index : [1,[2,2,2,2,2,2]],
           effectBus : ["gongs",0.5]
         },
         kenong : {
@@ -2495,16 +2466,15 @@ gamelan = {
           notes : [2,3,5,6,7,8,9],
           octave : [4,4,4,4,4,5,5],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[1.002,1.003,1.004,1.005,1.004,1.006,1.004]],
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
           ampSynth : [1,[0.15,0.15,0.15,0.15,0.15,0.15,0.15]],
-          attack : [2,2,2,2,2,2,2],
-          decay : [3000,3000,3000,3000,3000,3000,3000],
-          waveShape : ["sine","sine","sine","sine","sine","sine","sine"],
-          cmRatio : [3.507,3.507,3.507,3.507,3.507,3.507,3.507],
-          index : [1,1,1,1,1,1,1],
+          attack : [1,[2,2,2,2,2,2,2]],
+          decay : [1,[3000,3000,3000,3000,3000,3000,3000]],
+          waveform : ["Sine","Sine","Sine","Sine","Sine","Sine","Sine"],
+          cmRatio : [1,[3.507,3.507,3.507,3.507,3.507,3.507,3.507]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["gongs",0.5]
         },
         gongSuw : {
@@ -2515,16 +2485,15 @@ gamelan = {
           notes : [1,2],
           octave : [2,2],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[0.99,0.99]],
           detuneSamp : [1,[1,1]],
           ampSamp : [1,[1,1]],
           ampSynth : [1,[0.1,0.1]],
-          attack : [80,80],
-          decay : [5000,5000],
-          waveShape : ["sine","sine"],
-          cmRatio : [2.01,2.01],
-          index : [1,1],
+          attack : [1,[80,80]],
+          decay : [1,[5000,5000]],
+          waveform : ["Sine","Sine"],
+          cmRatio : [1,[2.01,2.01]],
+          index : [1,[1,1]],
           effectBus : ["gongs",0.5]
         }
       }
@@ -2539,37 +2508,36 @@ gamelan = {
           notes : [3,5,6],
           octave : [1,1,1],
           stretch : 1,
-          transpose : 1,
           detuneSynth : [1,[0.95,0.95,0.95]],
           detuneSamp : [1,[1,1,1]],
           ampSamp : [1,[1,1,1]],
           ampSynth : [1,[0.35,0.35,0.35]],
-          attack : [100,100,100],
-          decay : [7000,7000,7000],
-          waveShape : ["triangle"],
-          fmPriority : 1,
-          fm : [[2.01,1],[2.01,1],[2.01,1]], // [cmRatio,index]
-          beat : [[1.2,0.02],[1.2,0.02],[1.2,0.02]], // [frequency,subtractor]
-          residuum : [1,50,"pulse",0.15], // added synth-properties
+          attack : [1,[100,100,100]],
+          decay : [1,[7000,7000,7000]],
+          waveform : ["Triangle"],
+          cmRatio : [1,[2.01,2.01,2.01]],
+          index : [1,[1,1,1]],
+          beat : [[1.2,0.02],[1.2,0.02],[1.2,0.02]], // [frequency,subtractor] - just ideas for now
+          residuum : [1,50,"Triangle",0.15], // added synth-properties - no Pulse
           effectBus : ["gongs",0.5]
         },
         kdhKalih : {
-          use : false,
-          samplesOnly : true,
+          use : true,
+          samplesOnly : (conf.drumsSamples) ? true : false,
           type : "drums",
           notes : ["b","p","t","k","o","a","r"],
           toneNames : ["dhah","thung","tak","ket","thong","tap","kret"],
-          transpose : 1,
-          frequency : [120,360,500,500,420,500,500], // why fantasy?
-          detuneSynth : [1,[1,1,1,1,1,1,1]], // why fantasy?
+          frequencies : [120,360,500,500,420,500,500], // fantasy?
+          detuneSynth : [1,[1,1,1,1,1,1,1]], // fantasy?
           detuneSamp : [1,[1,1,1,1,1,1,1]],
           ampSamp : [1,[1,1,1,1,1,1,1]],
-          ampSynth : [1,[0.2,0.2,0.2,0.2,0.1,0.2,0.2]],
-          attack : [20,5,1,1,2,1,1],
-          decay : [2000,1000,100,50,1000,20,50],
-          waveShape : ["sine","sine","square","sawtooth","pulse","sawtooth","pulse"],
-          cmRatio : [1 + Math.sqrt(2),1 + Math.sqrt(2),5,2,2,2,2],
-          index : [1,1,1,1,1,1,1],
+          ampSynth : [1,[0.2,0.2,0.2,0.1,0.1,0.1,0.1]],
+          attack : [1,[20,5,1,1,2,1,1]],
+          decay : [1,[2000,1000,100,50,1000,20,50]],
+          waveform : ["Sine","Sine","Triangle","Triangle","Triangle","Triangle","Triangle"], // currently only Sine and Triangle work - and waveforms cannot be switched by Seq
+//          waveform : ["Sine","Sine","Square","Sawtooth","Pulse","Sawtooth","Pulse"],
+          cmRatio : [1,[1,1+Math.sqrt(2),5,2,2,2,2]],
+          index : [1,[1,1,1,1,1,1,1]],
           effectBus : ["gongs",0.5]
         }
       }
@@ -2812,6 +2780,7 @@ nyaga = {
 };
 startingTheEngines = function() {
   scales = []; iNames = []; pNames = [];
+  parts = []; synths = [];
   var ensemble = now.instruments;
   pulseUnit = now.pulseUnit;
   var ix = 0;
@@ -2823,20 +2792,26 @@ startingTheEngines = function() {
       iNames.push(iName);
       if (iName===flags.bukaInstr) { window["ixBukaInstr"] = ix; }
       if (iName===conf.timeKeeper) { window["ixTimeKeeper"] = ix; }
-      scales.push((instr.frequency) ? instr.frequency : instrFrequencies(instr));
+      scales.push((instr.frequencies) ? instr.frequencies : instrFrequencies(instr));
       for (var pName in nyaga) {
         if (nyaga[pName].ricikan === iName) { pNames.push(pName); break; }
       }
+      // prepare Synths (for now with predefined waveform - switching by Seq not possible yet)
+      if (conf.synthesis==="additive") {
+          synths.push(Synth({ waveform : instr.waveform[0] }));
+        } else if (conf.synthesis==="FM") {
+          synths.push(FM({ waveform : instr.waveform[0], cmRatio : instr.cmRatio[0]*instr.cmRatio[1][0], index : instr.index[0]*instr.index[1][0] }));
+        } else {
+          synths.push(Synth({ waveform : "Triangle" }));
+        }
       // prepare Samplers (to be callable by instrumentName)
       window[cap] = Function("_sequence", "_timeValue", "_amp", "_freq", "return new _SampleSeq('"+iName+"', _sequence, _timeValue, _amp, _freq)");
       ix++;
     }
   }
   instrCnt = ix;
-  parts = []; synths = [];
   for (var i=0;i<instrCnt;i++) {
   // create Synth-Dummies - current values are provisional untill passing in by Seq works
-    synths.push(Synth({})); // synths.push(Synth({ active : false }).out())
   //  if (instr.effectBus) { synths[ix].send(instr.effectBus[0],instr.effectBus[1]); }
   }
   // push part-definitions to array "parts" ####################################
@@ -2889,7 +2864,7 @@ startingTheEngines = function() {
     return result;
   }
   gendhing = {
-    play : function(counter) { doForAll("play",counter); if ( toggle.logBranching && flags.segment === "buka") { console.log(msg.console.onStartPlaying); } return msg.returnInfo.allPlay(); },
+    play : function(counter) { doForAll("play",counter); if ( flags.logBranching && flags.segment === "buka") { console.log(msg.console.onStartPlaying); } return msg.returnInfo.allPlay(); },
     once : function(counter) { doForAll("once",counter); return msg.returnInfo.allOnce() },
     pause : function(counter) { doForAll("pause",counter); return msg.returnInfo.allPause() },
     stop : function(counter) { doForAll("stop",counter); return msg.returnInfo.allStop() },
@@ -2927,7 +2902,7 @@ takeOff = function() {
 
   onGong = function() {
     nthGong++;
-    if (toggle.logGongan) { console.log(msg.console.onGong()); }
+    if (flags.logGongan) { console.log(msg.console.onGong()); }
     nthNong = 1; nthPul = 0; nthThuk = 0; nthPyang = 0; // reset relative counters
     nthGatra = 1; nthSabet = 0; keteg = 1; // rethink exactly whether to reset gPulse to 0 manually or not
     kar.branching(); // trigger settings for gongan to come
@@ -2962,36 +2937,36 @@ takeOff = function() {
             nthSabet++
             if (gPulse % _16th !==0) {
               nthPyang++;
-              if (toggle.logGongan) {console.log(msg.console.onKempyang());}
+              if (flags.logGongan) {console.log(msg.console.onKempyang());}
             }
             // tiba/thuk: ------------------------------------------------------
             if (gPulse % _16th === 0) {
               if (gPulse===ppBuka && flags.segment === "buka") { onGong(); }
               if (gPulse % _8th !== 0) {
                 nthThuk++;
-                if (toggle.logGongan) {console.log(msg.console.onKethuk());}
+                if (flags.logGongan) {console.log(msg.console.onKethuk());}
               }
               // gatra/pul: ----------------------------------------------------
               if (gPulse % _8th === 0) {
                 if ((gPulse % quarter !== 0) && (gPulse !== ppGatra)) {
                   nthPul++;
-                  if (toggle.logGongan) {console.log(msg.console.onKempul());}
-                  if (toggle.logGongan) {console.log("\n");}
+                  if (flags.logGongan) {console.log(msg.console.onKempul());}
+                  if (flags.logGongan) {console.log("\n");}
                 } else if (gPulse === ppGatra) {
-                  if (toggle.logGongan) {console.log(msg.console.onWela()); }
-                  if (toggle.logGongan) {console.log("\n"); }
+                  if (flags.logGongan) {console.log(msg.console.onWela()); }
+                  if (flags.logGongan) {console.log("\n"); }
                 }
                 if (gPulse % quarter === 0) {
                   // Here go things on kenong-level
                   if ((gPulse % fullPeriod !== 0) && (ticker !== ppBuka)) {
-                    if (toggle.logGongan) { console.log( msg.console.onKenong()); }
-                    if (toggle.logGongan) { console.log("\n"); }
+                    if (flags.logGongan) { console.log( msg.console.onKenong()); }
+                    if (flags.logGongan) { console.log("\n"); }
                     nthNong++;
                   }
                   if (gPulse % halph === 0) {
                     // Here go things on halph-gong-level
                     if (gPulse % fullPeriod === 0) {
-//                      onGong();
+                      onGong();
                     }
                   }
                 }
@@ -3003,10 +2978,9 @@ takeOff = function() {
       ],
       durations : [_32]
     })
-  )
-/*
-  gongan = parts[parts.length-1]
-  if (toggle.watchDogs) {
+  );
+  gongan = parts[parts.length-1];
+  if (flags.watchDogs) {
     var decideUponNgelikBranch = ppGongan-ppGatra;
     var favoredIramaSwitch = ppTiba;
     var favoredReturnToSteadyIrI = ppTiba;
@@ -3023,7 +2997,7 @@ takeOff = function() {
         // speed-change
         if (flags.seseg || flags.rem) { kar.seseg(); }
         // invoke ngelik-signal
-        if ( !toggle.autoPilot && flags.goToNgelik && gPulse === decideUponNgelikBranch) {
+        if ( !flags.autoPilot && flags.goToNgelik && gPulse === decideUponNgelikBranch) {
             partSet(ixBonangPan,flags.segment,flags.irama);
             partSet(ixBonangBar,flags.segment,flags.irama);
             console.log(msg.console.onWatchDogTriggerNgelikSignal)
@@ -3031,60 +3005,58 @@ takeOff = function() {
         // speed guard
         if (flags.fastForward === false && ( pulseUnit < par.tooFast || (pulseUnit > par.tooSlow && !flags.isGonganSuwuk)) ) {
           kar.jadi();
-          if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
+          if (flags.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
         }
         // iramaSwitch up (slow->fast)
         if (flags.seseg && !flags.doSuwuk && flags.irama === "irII" && pulseUnit < par.thresholdTanggung && gPulse % favoredIramaSwitch === 0 ) {
           kar.irama("irI");
-          if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToIrI()); }
+          if (flags.logWatchDogs) { console.log(msg.console.onWatchDogToIrI()); }
         }
         if (flags.seseg && !flags.doSuwuk && flags.irama === "irI" && pulseUnit < (par.thresholdTanggung-par.bufferTanggung) && gPulse % favoredReturnToSteadyIrI === 0 ) {
           kar.jadi();
-          if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
+          if (flags.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
         }
         // iramaSwitch down (fast->slow)
         if (flags.rem && !flags.doSuwuk && flags.irama === "irI" && pulseUnit > (par.thresholdDadi) && (gPulse % favoredIramaSwitch === 0) ) {
           kar.irama("irII");
-          if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToIrII()); }
+          if (flags.logWatchDogs) { console.log(msg.console.onWatchDogToIrII()); }
         }
         if (flags.rem && !flags.doSuwuk && flags.irama === "irII" && pulseUnit > (par.thresholdDadi+par.bufferDadi) && (gPulse % favoredReturnToSteadyIrII === 0) ) {
           kar.jadi();
-          if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
+          if (flags.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
         }
         // suwuk (needs much work)
         if (flags.doSuwuk) {
           switch (true) {
             case gPulse === startSuwukPossibleMin || ((gPulse === startSuwukPossibleMax) && !flags.isGonganSuwuk) :
-              partSet(ixKendhang,"suwuk"); // there will be more going on in a nice suwuk
+              partSet(ixKdhKalih,"suwuk"); // there will be more going on in a nice suwuk
               kar.nyeseg(10);
               flags.isGonganSuwuk = true; // for now suwuks that span one gongan
               flags.ngampat = true;
-              if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogReinforceSuwukMode); }
+              if (flags.logWatchDogs) { console.log(msg.console.onWatchDogReinforceSuwukMode); }
               break;
             case ((gPulse === startSuwukPossibleMinEndNgampat) && flags.ngampat) || ((gPulse === startSuwukPossibleMaxEndNgampat) && flags.ngampat && !flags.habisNgampat) :
               kar.jadi();
               flags.habisNgampat = true;
-              if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
+              if (flags.logWatchDogs) { console.log(msg.console.onWatchDogToSteadySpeed()); }
               break;
             case gPulse === favoredFinalSlowDown :
               kar.nyuwuk();
-              if (toggle.logWatchDogs) { console.log(msg.console.onWatchDogToFinalSlowdown); }
+              if (flags.logWatchDogs) { console.log(msg.console.onWatchDogToFinalSlowdown); }
               break;
             case flags.isGonganSuwuk === true && gPulse === 1 &&
               ((flags.irama === "irI" && pulseUnit > par.suwukThresholdIrI) || (flags.irama === "irII" && pulseUnit > par.suwukThresholdIrII)) :
               kar.gongSuwuk();
-              if (toggle.logWatchDogs) { console.log(msg.console.onGongSuwuk); }
+              if (flags.logWatchDogs) { console.log(msg.console.onGongSuwuk); }
             break;
           }
         }
       }],
       durations : [_32] })
-    )
+    );
     watchDogs = wd = parts[parts.length-1];
   }
-*/
-/*
-  if (toggle.autoPilot) {
+  if (flags.autoPilot) {
     var startSlowDownDuringBuka = ppBuka-(2*ppGatra);
     var stopSlowDownAfterBuka = ppTiba;
     var iramaDownIn1stKenongan = ppSabet*2;
@@ -3096,18 +3068,17 @@ takeOff = function() {
         active : false,
         function : [ function() {
         switch (true) {
-          case nthGong === 0 && gPulse === startSlowDownDuringBuka : kar.ngerem(1.5); if (toggle.logAutoPilot) { console.log(msg.console.onAutoSlowDown()); } break;
-          case nthGong === 1 && gPulse === stopSlowDownAfterBuka : kar.jadi(); if (toggle.logAutoPilot) { console.log(msg.console.onAutoSteadySpeed()); } break;
-          case nthGong === 2 && gPulse === iramaDownIn1stKenongan : kar.ngerem(2.5); if (toggle.logAutoPilot) { console.log(msg.console.onAutoSlowDown()); } break;
-          case nthGong === 4 && gPulse === iramaUpIn3rdKenongan : kar.nyeseg(); if (toggle.logAutoPilot) { console.log(msg.console.onAutoSpeedUp()); } break;
-          case nthGong === 6 && gPulse === iramaDownIn3rdKenongan : kar.ngerem(); if (toggle.logAutoPilot) { console.log(msg.console.onAutoSlowDown()); } break;
-          case nthGong === 7 && gPulse === startSuwukMode : flags.doSuwuk = true; if (toggle.logAutoPilot) { console.log(msg.console.onAutoSetSuwukFlag); } break;
+          case nthGong === 0 && gPulse === startSlowDownDuringBuka : kar.ngerem(1.5); if (flags.logAutoPilot) { console.log(msg.console.onAutoSlowDown()); } break;
+          case nthGong === 1 && gPulse === stopSlowDownAfterBuka : kar.jadi(); if (flags.logAutoPilot) { console.log(msg.console.onAutoSteadySpeed()); } break;
+          case nthGong === 2 && gPulse === iramaDownIn1stKenongan : kar.ngerem(2.5); if (flags.logAutoPilot) { console.log(msg.console.onAutoSlowDown()); } break;
+          case nthGong === 4 && gPulse === iramaUpIn3rdKenongan : kar.nyeseg(); if (flags.logAutoPilot) { console.log(msg.console.onAutoSpeedUp()); } break;
+          case nthGong === 6 && gPulse === iramaDownIn3rdKenongan : kar.ngerem(); if (flags.logAutoPilot) { console.log(msg.console.onAutoSlowDown()); } break;
+          case nthGong === 7 && gPulse === startSuwukMode : flags.doSuwuk = true; if (flags.logAutoPilot) { console.log(msg.console.onAutoSetSuwukFlag); } break;
         }
       }],
       durations : [_32] })
     )
     autoPilot = ap = parts[parts.length-1];
   }
-*/
   return "... welcome to gendhing. You are almost there. Type gendhing.play() or make your choices first. (not much for now, though ;))";
 };
