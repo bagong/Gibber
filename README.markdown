@@ -1,6 +1,22 @@
+## GibberGamelan alias gamelanScript ##
+
+This fork serves the purpose to host a gamelan-extension to Charlie Roberts Gibber
+(see below). You should use the gamelan-dev branch. It is less ressource-hungry
+and it does not require the files to reside in an Web-server-folder. The only
+browser that works for now is Google Chrome (or Chromium). Once you have opened
+index.html you will find a menu-entry load/gamelan. If you click that, you will
+get a introductory-page that explains the basics.
+
+You will find the gamelan-related files in the subfolder js/gamelan. Enjoy and
+stay tuned, more is on the way...
+
+Rainer Schuetz
+rsATbagong.de
+
 ## Gibber ##
 
-Gibber is a live coding environment for the web browser, built on top of audiolib.js and using the ACE code editor. I've only tested it in Chrome.
+Gibber is a live coding environment for the web browser, built on top of audiolib.js
+and using the ACE code editor. I've only tested it in Chrome.
 
 Below is a code sample. To test out Gibber, visit http://www.charlie-roberts.com/gibber
 
