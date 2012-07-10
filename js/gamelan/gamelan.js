@@ -16,7 +16,7 @@ conf = { // these settings can change (that are the plans ;)), but they are more
   pulseMode : true, // pulseMode creates durations from a mini-Pulse while propMode or dursMode uses individual durations for each note (the later doesn't work well yet, problems with offset, but is probably more consistent on the long run)
   audioHost : "http://localhost",
   audioPath : "gamelan/audiofiles",
-  synthesis : "additive", // additive,fm,samples (additive currently is just 1 oscillator)
+  synthesis : "FM", // additive,fm,Triangle,samples (additive currently is just 1 oscillator and samples doesn't work, what you see is a plan ;))
   drumsSamples : false
 };
 par = {
@@ -82,7 +82,6 @@ now = { // contextual/temporal information - depend on above values and performa
     get keteg() { return ((G.sampleRate*120*kar.irFactor(flags.irama))/(pulseUnit*now.ppb)).toFixed(2) }
   }
 };
-// flags for state monitoring (no user-interference expected)
 flags = {
   gendhing : "wilujeng",
   pathet : "p7",
@@ -2796,13 +2795,22 @@ startingTheEngines = function() {
       for (var pName in nyaga) {
         if (nyaga[pName].ricikan === iName) { pNames.push(pName); break; }
       }
-      // prepare Synths (for now with predefined waveform - switching by Seq not possible yet)
+      // prepare Synths (for now with predefined waveform - switching by Seq not possible yet - just one sine in "additive" for now...)
       if (conf.synthesis==="additive") {
-          synths.push(Synth({ waveform : instr.waveform[0] }));
+          synths.push(Synth({
+            waveform : instr.waveform[0]
+          }));
         } else if (conf.synthesis==="FM") {
-          synths.push(FM({ waveform : instr.waveform[0], cmRatio : instr.cmRatio[0]*instr.cmRatio[1][0], index : instr.index[0]*instr.index[1][0] }));
+          synths.push(FM({
+            maxVoices: 1,
+            waveform : instr.waveform[0],
+            cmRatio : instr.cmRatio[0]*instr.cmRatio[1][0],
+            index : instr.index[0]*instr.index[1][0]
+          }));
         } else {
-          synths.push(Synth({ waveform : "Triangle" }));
+          synths.push(Synth({
+            waveform : "Triangle"
+          }));
         }
       // prepare Samplers (to be callable by instrumentName)
       window[cap] = Function("_sequence", "_timeValue", "_amp", "_freq", "return new _SampleSeq('"+iName+"', _sequence, _timeValue, _amp, _freq)");
