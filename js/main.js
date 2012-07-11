@@ -15,8 +15,7 @@ requirejs([
   'gibberish/lib/external/audiofile', 
   'gibberish/lib/utils', 
   'gibberish/lib/cycle',
-  'gamelan/gamelan',
-  'gamelan/sampler'
+  'gamelan/gamelan'
 	],
 	
 	function   ( _a, _b, _c, _d, __gibberish, __gibber, __environment, e) {

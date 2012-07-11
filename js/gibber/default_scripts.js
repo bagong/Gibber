@@ -469,8 +469,13 @@ default:
 'j.durations.pick = weight(.8, .1, .1);',
 
 "gamelan":
-'// Settings/selection ##########################################################\n'+
-'flags.gending = "wilujeng";\n'+
+'// Welcome to GibberGamelan alias gamelanScript ###############################\n'+
+'// To play right away ignore the settings lines starting with flags. or conf.\n'+
+'// Go to prepareEngines() and hit ctrl-Return on that line\n'+
+'// Go on to gendhing.play() - hit ctrl-Return again. The gamelan should start playing.\n'+
+'// Open the javascript-console (ctrl-shft-j) to see some logging\n'+
+'\n'+
+'flags.gendhing = "wilujeng";\n'+
 'flags.pathet = "p7";\n'+
 'flags.form = "ladrang";\n'+
 'flags.garap = "gerongan-salisir";\n'+
@@ -484,18 +489,12 @@ default:
 'flags.logBranching = true;\n'+
 'flags.logAutoPilot = true;\n'+
 'flags.logWatchDogs = true;\n'+
+'conf.synthesis = "FM"; // try "FM", "triangle" (additive is just 1 sineOsc for now)\n'+
 '\n'+
-'conf.synthesis = "additive"; // try "FM", "triangle" (additive is just 1 sineOsc for now)\n'+
-'conf.drumsSamples = false; // doesn\'t work yet\n'+
-'\n'+
-'startingTheEngines();\n'+
-'takeOff();\n'+
-'\n'+
-'// play with\n'+
-'gendhing.play()\n'+
-'gendhing.stop()\n'+
-'\n'+
-'// and more\n',
+'prepareEngines();      // This loads the gamelan with settings from above\n'+
+'gendhing.play();       // This starts playing - give it a few minutes it\s an entire piece that stops by itself\n'+
+'gendhing.stop();       // I won\'t tell what this does (there is also gendhing.pause());\n'+
+'\n',
 
 "SYNTHESIS TUTORIALS":"LABEL START",
 
