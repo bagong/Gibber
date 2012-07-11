@@ -1,17 +1,42 @@
 ## GibberGamelan alias gamelanScript ##
 
 This fork serves the purpose to host a gamelan-extension to Charlie Roberts Gibber
-(see below). You should use the gamelan-dev branch. It is less ressource-hungry
-and it does not require the files to reside in an Web-server-folder. The only
-browser that works for now is Google Chrome (or Chromium). Once you have opened
-index.html you will find a menu-entry load/gamelan. If you click that, you will
-get a introductory-page that explains the basics.
-
-You will find the gamelan-related files in the subfolder js/gamelan. Enjoy and
+(see below). You will find the gamelan-related files in the subfolder js/gamelan. Enjoy and
 stay tuned, more is on the way...
 
-Rainer Schuetz
-rsATbagong.de
+Gamelan.js allows to emulate a subset of a Javanese Gamelan-Ensemble based on 
+the notation of only a single basic part/tone-succession and thereby tries to 
+model some of the competenceof Javanese musicians.
+
+In order to get this running you need Google Chrome or Chromium (version 18
+upwards are tested).
+- You will need all files from Gibber and gamelan.js in place as in the
+download from github (branch develop-gam, the default branch).
+- Open index.html (in the root-folder of Gibber) in Chrome
+- Find the menu "load" and click the entry "gamelan"
+- On the opening page ignore the settings lines starting with flags. or conf.
+Proceed right to prepareEngines() - hit ctrl-Return on that line
+- Proceed to gendhing.play() - hit ctrl-Return again and the gamelan should start
+playing.
+
+From the settings only the synth-alternative (FM,additive and triangle) and the
+logging choices allow changes for now.
+You need to reload the page before you can change settings and you need
+to make your settings before ctrl-Returning prepareEngines().
+
+gamelanScript is designed to be generic and extensible, so expect more... It is
+still in an early stage of development and plays one piece (gendhing) for now.
+Most of the develpment-efforts went into the part generation and general
+structure/framework, sounds are still very flat and timing is still stiff.
+There is no documentation except the code itself and some logging you can see
+in the javascript-console.
+
+Contributions are welcome.
+
+Rainer Schütz
+rs(at)bagong.de
+July 2012
+
 
 ## Gibber ##
 
