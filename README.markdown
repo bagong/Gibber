@@ -12,7 +12,9 @@ In order to get this running you need Google Chrome or Chromium (version 18
 upwards are tested).
 - You will need all files from Gibber and gamelan.js in place as in the
 download from github (branch develop-gam, the default branch).
-- Open index.html (in the root-folder of Gibber) in Chrome
+- Open index.html (in the root-folder of Gibber) in Chrome - you might have to 
+reload the page a few times before Gibber loads properly. You will see that it
+is ready to play when the red squares at the to left corner start moving.
 - Find the menu "load" and click the entry "gamelan"
 - On the opening page ignore the settings lines starting with flags. or conf.
 Proceed right to prepareEngines() - hit ctrl-Return on that line
